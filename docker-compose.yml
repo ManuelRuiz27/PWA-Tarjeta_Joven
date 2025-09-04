@@ -1,0 +1,24 @@
+version: "3.9"
+services:
+  web:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_BASE=/api
+    environment:
+      - VITE_API_BASE=/api
+    ports:
+      - "8080:80"
+    depends_on:
+      - backend
+    # Si hay backend en compose, nombrarlo "backend" escuchando en 8080
+    # y esta config ya hará el proxy /api -> backend:8080
+
+  backend:
+    build:
+      context: ./deploy/mock-backend
+    command: node server.js
+    ports:
+      - "8081:8080"
+    # Nota: expone 8081 en host solo para debug. Nginx habla con 'backend:8080' por red interna.

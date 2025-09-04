@@ -1,0 +1,77 @@
+/*
+  Design Tokens (CSS Variables)
+  - Colores base, tipografía, espaciados, radius y sombras.
+  - Modo oscuro controlado por data-theme="dark" en :root o <html>.
+*/
+
+:root {
+  /* Colores principales */
+  --color-green-900: #264f28; /* verde oscuro */
+  --color-primary: #588f41;   /* tema principal */
+  --color-accent: #a93257;    /* acento */
+
+  /* Escala de grises */
+  --gray-100: #f7f7f7;
+  --gray-200: #eeeeee;
+  --gray-300: #e2e2e2;
+  --gray-400: #c8c8c8;
+  --gray-500: #a0a0a0;
+  --gray-600: #7a7a7a;
+  --gray-700: #555555;
+  --gray-800: #2d2d2d;
+  --gray-900: #1a1a1a;
+
+  /* Map a tokens de UI */
+  --color-bg: #ffffff;
+  --color-text: var(--gray-900);
+  --color-muted: var(--gray-600);
+  --color-border: var(--gray-300);
+  --color-link: var(--color-primary);
+
+  /* Tipografía */
+  --font-base: system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-size-sm: 0.875rem;
+  --font-size-base: 1rem;
+  --font-size-lg: 1.125rem;
+  --line-height: 1.5;
+
+  /* Espaciados */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-6: 24px;
+
+  /* Radius */
+  --radius-sm: 6px;
+  --radius: 8px;
+  --radius-lg: 12px;
+
+  /* Sombras */
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.08);
+  --shadow: 0 4px 12px rgba(0,0,0,0.15);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.25);
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 3px rgba(88, 143, 65, 0.35);
+
+  /* Safe-area y alturas del shell */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  --app-header-height: 56px;
+  --app-bottom-nav-height: 56px;
+}
+
+:root[data-theme="dark"] {
+  color-scheme: dark;
+  --color-bg: #0f1115;
+  --color-text: #e6e6e6;
+  --color-muted: #a0a0a0;
+  --color-border: #2a2f3a;
+  --color-link: #7bc45a;
+  --shadow-sm: 0 1px 2px rgba(0,0,0,0.35);
+  --shadow: 0 4px 12px rgba(0,0,0,0.45);
+  --shadow-lg: 0 10px 30px rgba(0,0,0,0.6);
+}
+
