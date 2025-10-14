@@ -1,10 +1,10 @@
 # --- Build stage ---
-FROM node:20-alpine AS build
+FROM node:20.16-alpine AS build
 WORKDIR /app
 
-# Instala dependencias
+# Instala dependencias con versiones bloqueadas cuando hay lock
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Copia el resto del código
 COPY . .
@@ -17,7 +17,7 @@ ENV VITE_API_BASE=${VITE_API_BASE}
 RUN npm run build
 
 # --- Runtime stage ---
-FROM nginx:alpine AS runtime
+FROM nginx:1.27.1-alpine AS runtime
 WORKDIR /usr/share/nginx/html
 
 # Copia build estático
