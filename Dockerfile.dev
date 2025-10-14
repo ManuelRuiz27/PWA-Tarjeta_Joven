@@ -1,9 +1,9 @@
-FROM node:20-alpine
+FROM node:20.16-alpine
 WORKDIR /app
 
 # Instala deps (aprovecha cache si solo cambia código)
 COPY package.json package-lock.json* ./
-RUN npm install
+RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
 
 # Variables útiles para hot reload en contenedores
 ENV HOST=0.0.0.0 \

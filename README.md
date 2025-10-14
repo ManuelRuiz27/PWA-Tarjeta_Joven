@@ -21,14 +21,15 @@ Aplicación React 18 + Vite + TypeScript con soporte PWA (Workbox `injectManifes
 
 ## Requisitos previos
 
-- Node.js 18+ (recomendado 20)
-- npm 9+
+- Node.js 20.16.x
+- npm 10.8.x
 - Docker/Compose (opcional) para despliegue o entorno dev en contenedor
 
 ## Instalación
 
 1. Clona el repositorio.
-2. Instala dependencias: `npm install`.
+2. Instala dependencias: `npm ci` (usa las versiones bloqueadas en `package-lock.json`).
+   - Si utilizas `nvm`, ejecuta `nvm use` para adoptar automáticamente la versión definida en `.nvmrc`.
 
 ## Variables de entorno
 

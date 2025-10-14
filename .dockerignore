@@ -1,0 +1,17 @@
+node_modules
+.dist
+.git
+.gitignore
+.env
+.env.*
+dist
+coverage
+storybook-static
+.vite
+.vitest
+Dockerfile.dev
+Dockerfile
+npm-debug.log*
+.idea
+.vscode
+
