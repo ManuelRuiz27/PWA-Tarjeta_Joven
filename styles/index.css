@@ -3,6 +3,7 @@
   - Importa tokens y aplica estilos globales mínimos.
 */
 @import './tokens.css';
+@import '../src/styles/theme.css';
 
 html, body {
   height: 100%;

@@ -1,240 +1,386 @@
 import { FormEvent, useEffect, useMemo, useRef, useState } from 'react';
-import TextField from '@features/auth/components/TextField';
-import PasswordField from '@features/auth/components/PasswordField';
-import FileInput from '@features/auth/components/FileInput';
-import OTPInput from '@app/components/OTPInput';
-import { getAgeFromCurp, isValidCurp } from '@features/auth/utils/curp';
-import { createOtpManager } from '@features/auth/utils/otpManager';
-import { registerForm, verifySms } from '@features/auth/auth.api';
+import { useNavigate } from 'react-router-dom';
 import { useAppDispatch } from '@app/hooks';
 import { setTokens, setUser } from '@features/auth/authSlice';
-import { useNavigate } from 'react-router-dom';
-import { FormattedMessage, useIntl } from 'react-intl';
-import { motion } from 'framer-motion';
-import { registerSchema, type RegisterValues } from '@features/auth/validation';
+import { registerForm } from '@features/auth/auth.api';
+import InputFile from '@components/InputFile';
 
-type Step = 'form' | 'otp' | 'done';
+const CURP_REGEX = new RegExp(
+  '^(?:[A-Z][AEIOU][A-Z]{2})(?:\\d{2})(?:0[1-9]|1[0-2])(?:0[1-9]|[12]\\d|3[01])[HM]' +
+    '(?:AS|BC|BS|CC|CL|CM|CS|CH|DF|DG|GT|GR|HG|JC|MC|MN|MS|NT|NL|OC|PL|QT|QR|SP|SL|SR|TC|TS|TL|VZ|YN|ZS)' +
+    '(?:[B-DF-HJ-NP-TV-Z]{3})(?:[0-9A-Z])\\d$'
+);
+const MAX_FILE_SIZE = 2 * 1024 * 1024; // 2MB
+const ACCEPTED_TYPES = ['application/pdf', 'image/jpeg', 'image/png'];
+const BIRTHDATE_REGEX = new RegExp('^(\\d{2})\\/(\\d{2})\\/(\\d{4})$');
+const FALLBACK_FILE_REGEX = /\.(pdf|png|jpe?g)$/i;
+
+interface RegisterFormValues {
+  firstName: string;
+  lastName: string;
+  birthDate: string;
+  curp: string;
+  colony: string;
+  ine: File | null;
+  addressProof: File | null;
+  curpDocument: File | null;
+  terms: boolean;
+}
+
+type RegisterErrors = Partial<Record<keyof RegisterFormValues, string>>;
+
+type ParsedDate = { day: number; month: number; year: number };
+
+function parseBirthDate(value: string): ParsedDate | null {
+  const match = BIRTHDATE_REGEX.exec(value.trim());
+  if (!match) return null;
+  const [_, dd, mm, yyyy] = match;
+  const day = Number(dd);
+  const month = Number(mm);
+  const year = Number(yyyy);
+  const date = new Date(year, month - 1, day);
+  if (date.getFullYear() !== year || date.getMonth() !== month - 1 || date.getDate() !== day) return null;
+  return { day, month, year };
+}
+
+function validateFile(file: File | null, label: string): string | undefined {
+  if (!file) return `Adjunta ${label.toLowerCase()}.`;
+  const isTypeValid = file.type ? ACCEPTED_TYPES.includes(file.type) : FALLBACK_FILE_REGEX.test(file.name);
+  if (!isTypeValid) return 'Formato no permitido. Usa PDF, JPG o PNG.';
+  if (file.size > MAX_FILE_SIZE) return 'El archivo debe pesar máximo 2MB.';
+  return undefined;
+}
 
 export default function Register() {
-  const intl = useIntl();
   const dispatch = useAppDispatch();
   const navigate = useNavigate();
 
-  // Campos del formulario principal
-  const [curp, setCurp] = useState('');
-  const [phone, setPhone] = useState('');
-  const [password, setPassword] = useState('');
-  const [tutorName, setTutorName] = useState('');
-  const [tutorPhone, setTutorPhone] = useState('');
-  const [tutorIne, setTutorIne] = useState<File | null>(null);
+  const [values, setValues] = useState<RegisterFormValues>({
+    firstName: '',
+    lastName: '',
+    birthDate: '',
+    curp: '',
+    colony: '',
+    ine: null,
+    addressProof: null,
+    curpDocument: null,
+    terms: false,
+  });
 
-  // Errores
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const firstErrorRef = useRef<HTMLInputElement | null>(null);
-
-  // Paso OTP
-  const [step, setStep] = useState<Step>('form');
-  const [otp, setOtp] = useState('');
-  const [otpError, setOtpError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false);
+  const [errors, setErrors] = useState<RegisterErrors>({});
   const [networkError, setNetworkError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const statusRegionRef = useRef<HTMLDivElement | null>(null);
 
-  // Intentos y cooldown
-  const otpHelper = useMemo(() => createOtpManager(3, 60), []);
-  const [otpState, setOtpState] = useState({ attempts: 0, lastSentAt: null as number | null });
-
-  const age = useMemo(() => getAgeFromCurp(curp) ?? undefined, [curp]);
-  const isMinor = age !== undefined && age < 18;
-
-  // Enfoque en el primer error cuando valide
   useEffect(() => {
-    if (firstErrorRef.current) {
-      firstErrorRef.current.focus();
-      firstErrorRef.current = null;
-    }
-  }, [errors]);
+    if (networkError) statusRegionRef.current?.focus();
+  }, [networkError]);
 
-  function validate(): boolean {
-    const res = registerSchema.safeParse({ curp: curp.trim().toUpperCase(), phone, password, tutorName, tutorPhone, tutorIne });
-    if (!res.success) {
-      const e: Record<string, string> = {};
-      for (const issue of res.error.issues) {
-        const k = String(issue.path[0]);
-        e[k] = issue.message;
-      }
-      setErrors(e);
-      setTimeout(() => {
-        const first = document.querySelector('[aria-invalid="true"]') as HTMLElement | null;
-        first?.focus();
-      }, 0);
+  const age = useMemo(() => {
+    const parsed = parseBirthDate(values.birthDate);
+    if (!parsed) return null;
+    const now = new Date();
+    let ageYears = now.getFullYear() - parsed.year;
+    const hasHadBirthday =
+      now.getMonth() + 1 > parsed.month || (now.getMonth() + 1 === parsed.month && now.getDate() >= parsed.day);
+    if (!hasHadBirthday) ageYears -= 1;
+    return ageYears;
+  }, [values.birthDate]);
+
+  function setField<K extends keyof RegisterFormValues>(key: K, value: RegisterFormValues[K]) {
+    setValues((prev) => ({ ...prev, [key]: value }));
+    setErrors((prev) => ({ ...prev, [key]: undefined }));
+  }
+
+  function validateAll(): boolean {
+    const newErrors: RegisterErrors = {};
+    if (!values.firstName.trim()) newErrors.firstName = 'Ingresa tu nombre.';
+    if (!values.lastName.trim()) newErrors.lastName = 'Ingresa tus apellidos.';
+    if (!values.birthDate.trim()) {
+      newErrors.birthDate = 'Ingresa tu fecha de nacimiento.';
+    } else if (!parseBirthDate(values.birthDate)) {
+      newErrors.birthDate = 'Usa el formato DD/MM/AAAA.';
+    }
+    const curp = values.curp.trim().toUpperCase();
+    if (!curp) {
+      newErrors.curp = 'La CURP es obligatoria.';
+    } else if (!CURP_REGEX.test(curp)) {
+      newErrors.curp = 'Verifica que la CURP tenga 18 caracteres válidos.';
+    }
+    if (!values.colony.trim()) newErrors.colony = 'Indica tu colonia.';
+    const ineError = validateFile(values.ine, 'tu INE');
+    if (ineError) newErrors.ine = ineError;
+    const proofError = validateFile(values.addressProof, 'tu comprobante de domicilio');
+    if (proofError) newErrors.addressProof = proofError;
+    const curpDocError = validateFile(values.curpDocument, 'tu CURP');
+    if (curpDocError) newErrors.curpDocument = curpDocError;
+    if (!values.terms) newErrors.terms = 'Debes aceptar los términos y avisos de privacidad.';
+
+    setErrors(newErrors);
+
+    if (Object.keys(newErrors).length > 0) {
+      window.requestAnimationFrame(() => {
+        const firstInvalid = document.querySelector<HTMLElement>('[aria-invalid="true"]');
+        firstInvalid?.focus();
+      });
       return false;
     }
-    setErrors({});
     return true;
   }
 
-  async function onSubmit(e: FormEvent) {
-    e.preventDefault();
+  async function handleSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
     setNetworkError(null);
-    if (!validate()) return;
-    try {
-      setLoading(true);
-      const fd = new FormData();
-      fd.append('curp', curp.trim().toUpperCase());
-      fd.append('phone', phone);
-      fd.append('password', password);
-      if (isMinor) {
-        fd.append('tutorName', tutorName);
-        fd.append('tutorPhone', tutorPhone);
-        if (tutorIne) fd.append('tutorIne', tutorIne);
-      }
-      await registerForm(fd);
-      // Registrado: asumimos que el backend envió OTP; activamos cooldown
-      setOtpState((s) => otpHelper.recordResend(s));
-      setStep('otp');
-      setTimeout(() => document.getElementById('otp-input')?.focus(), 0);
-    } catch (err: any) {
-      setNetworkError(err.message || intl.formatMessage({ id: 'register.error.network' }));
-    } finally {
-      setLoading(false);
-    }
-  }
+    if (!validateAll()) return;
 
-  async function onVerifyOtp() {
-    setOtpError(null);
-    setNetworkError(null);
-    if (!/^\d{6}$/.test(otp)) {
-      setOtpError(intl.formatMessage({ defaultMessage: 'Ingresa un código de 6 dígitos.' }));
-      return;
-    }
-    if (!otpHelper.canAttempt(otpState)) {
-      setOtpError(intl.formatMessage({ defaultMessage: 'Has alcanzado el máximo de intentos.' }));
-      return;
-    }
     try {
       setLoading(true);
-      const res = await verifySms({ phone, code: otp });
-      // Guardamos autenticación y navegamos
-      dispatch(setTokens({ tokens: res.tokens, user: res.user }));
-      dispatch(setUser(res.user));
-      setStep('done');
+      const formData = new FormData();
+      formData.append('firstName', values.firstName.trim());
+      formData.append('lastName', values.lastName.trim());
+      formData.append('birthDate', values.birthDate.trim());
+      formData.append('curp', values.curp.trim().toUpperCase());
+      formData.append('colony', values.colony.trim());
+      if (values.ine) formData.append('ine', values.ine);
+      if (values.addressProof) formData.append('addressProof', values.addressProof);
+      if (values.curpDocument) formData.append('curpDocument', values.curpDocument);
+      formData.append('terms', String(values.terms));
+
+      const response = await registerForm(formData);
+      dispatch(setTokens({ tokens: response.tokens, user: response.user }));
+      dispatch(setUser(response.user));
       navigate('/profile');
     } catch (err: any) {
-      setOtpState((s) => otpHelper.recordAttempt(s));
-      setOtpError(intl.formatMessage({ defaultMessage: 'Código incorrecto o expirado. Intenta nuevamente.' }));
+      setNetworkError(err?.message || 'No pudimos completar el registro. Intenta nuevamente.');
     } finally {
       setLoading(false);
     }
   }
 
-  function onResendOtp() {
-    if (!otpHelper.canResend(otpState)) return;
-    setOtp('');
-    // En un escenario real, haríamos POST a /api/auth/resend-sms
-    setOtpState((s) => otpHelper.recordResend(s));
-  }
-
-  const resendDisabled = !otpHelper.canResend(otpState);
-  const resendIn = otpHelper.nextResendIn(otpState);
-  const remainingAttempts = 3 - otpState.attempts;
-
   return (
-    <section>
-      <h1><FormattedMessage id="register.title" defaultMessage="Registro" /></h1>
+    <section className="form-shell" aria-labelledby="register-title">
+      <header className="form-shell__header">
+        <h1 id="register-title" className="form-shell__title">
+          Crear cuenta Tarjeta Joven
+        </h1>
+        <p className="form-shell__subtitle">
+          Completa tu información personal y adjunta los documentos solicitados para validar tu identidad.
+        </p>
+      </header>
+
+      <div
+        ref={statusRegionRef}
+        tabIndex={-1}
+        aria-live="assertive"
+        aria-atomic="true"
+        style={{ position: 'absolute', width: 1, height: 1, overflow: 'hidden', clip: 'rect(0 0 0 0)' }}
+      />
+
       {networkError && (
-        <div role="alert" style={{ color: 'crimson' }}>{networkError}</div>
-      )}
-
-      {step === 'form' && (
-        <form onSubmit={onSubmit} noValidate>
-          <TextField
-            label={intl.formatMessage({ id: 'register.curp', defaultMessage: 'CURP' })}
-            value={curp}
-            onChange={(e) => setCurp(e.currentTarget.value.toUpperCase())}
-            error={errors.curp}
-            placeholder="Ej. ABCD001231HDFRRS09"
-            aria-invalid={Boolean(errors.curp)}
-            ref={(el: any) => {
-              if (errors.curp && el) firstErrorRef.current = el;
-            }}
-          />
-          <TextField
-            label={intl.formatMessage({ id: 'register.phone', defaultMessage: 'Teléfono' })}
-            value={phone}
-            onChange={(e) => setPhone(e.currentTarget.value.replace(/[^\d+]/g, ''))}
-            error={errors.phone}
-            placeholder="10-15 dígitos"
-            aria-invalid={Boolean(errors.phone)}
-            ref={(el: any) => {
-              if (errors.phone && el) firstErrorRef.current = el;
-            }}
-          />
-          <PasswordField
-            label={intl.formatMessage({ id: 'register.password', defaultMessage: 'Contraseña' })}
-            value={password}
-            onChange={(e) => setPassword(e.currentTarget.value)}
-            error={errors.password}
-          />
-
-          {age !== undefined && (
-            <p>Edad detectada: <strong>{age}</strong> años</p>
-          )}
-
-          {isMinor && (
-            <fieldset style={{ border: '1px solid var(--color-border)', padding: 12 }}>
-              <legend><FormattedMessage id="register.tutor" defaultMessage="Datos del tutor" /></legend>
-              <TextField
-                label={intl.formatMessage({ id: 'register.tutor.name', defaultMessage: 'Nombre del tutor' })}
-                value={tutorName}
-                onChange={(e) => setTutorName(e.currentTarget.value)}
-                error={errors.tutorName}
-              />
-              <TextField
-                label={intl.formatMessage({ id: 'register.tutor.phone', defaultMessage: 'Teléfono del tutor' })}
-                value={tutorPhone}
-                onChange={(e) => setTutorPhone(e.currentTarget.value.replace(/[^\d+]/g, ''))}
-                error={errors.tutorPhone}
-              />
-              <FileInput
-                label={intl.formatMessage({ id: 'register.tutor.ine', defaultMessage: 'INE del tutor (PDF/JPG, <4MB)' })}
-                accept="application/pdf,image/jpeg"
-                onChange={(e) => setTutorIne(e.currentTarget.files?.[0] ?? null)}
-                error={errors.tutorIne}
-              />
-            </fieldset>
-          )}
-
-          <div style={{ marginTop: 12 }}>
-            <button type="submit" disabled={loading}>{loading ? '...' : <FormattedMessage id="register.submit" defaultMessage="Registrarme" />}</button>
-          </div>
-        </form>
-      )}
-
-      {step === 'otp' && (
-        <div>
-          <h2><FormattedMessage id="register.sms.title" defaultMessage="Verificación SMS" /></h2>
-          <p><FormattedMessage id="register.sms.hint" defaultMessage="Ingresa el código de 6 dígitos enviado a {phone}" values={{ phone }} /></p>
-          <motion.div animate={otpError ? { x: [0, -6, 6, -4, 4, 0] } : { x: 0 }} transition={{ duration: 0.35 }}>
-            <OTPInput length={6} onComplete={setOtp} />
-            {otpError && (
-              <div role="alert" style={{ color: 'crimson', marginTop: 4 }}>{otpError}</div>
-            )}
-          </motion.div>
-          <div style={{ display: 'flex', gap: 8 }}>
-            <button onClick={onVerifyOtp} disabled={loading || !/^\d{6}$/.test(otp)}>
-              {loading ? '...' : <FormattedMessage id="register.sms.verify" defaultMessage="Verificar" />}
-            </button>
-            <button onClick={onResendOtp} disabled={resendDisabled} aria-disabled={resendDisabled}>
-              {resendDisabled ? <FormattedMessage id="register.sms.resendIn" defaultMessage="Reenviar en {seconds}s" values={{ seconds: resendIn }} /> : <FormattedMessage id="register.sms.resend" defaultMessage="Reenviar código" />}
-            </button>
-          </div>
-          <p><FormattedMessage id="register.sms.remaining" defaultMessage="Intentos restantes: {n}" values={{ n: remainingAttempts }} /></p>
+        <div className="alert alert--error" role="alert">
+          {networkError}
         </div>
       )}
 
-      {step === 'done' && (
-        <p>¡Registro y verificación completados!</p>
-      )}
+      <form onSubmit={handleSubmit} noValidate className="grid-auto">
+        <div className={`field${errors.firstName ? ' field--error' : ''}`}>
+          <label htmlFor="firstName" className="field__label">
+            Nombre(s)
+          </label>
+          <input
+            id="firstName"
+            name="firstName"
+            className="input-control"
+            value={values.firstName}
+            onChange={(event) => setField('firstName', event.currentTarget.value)}
+            aria-invalid={errors.firstName ? 'true' : undefined}
+            aria-describedby={errors.firstName ? 'firstName-error' : undefined}
+            placeholder="Ej. María Fernanda"
+            required
+          />
+          {errors.firstName && (
+            <p id="firstName-error" className="field__error" role="alert">
+              {errors.firstName}
+            </p>
+          )}
+        </div>
+
+        <div className={`field${errors.lastName ? ' field--error' : ''}`}>
+          <label htmlFor="lastName" className="field__label">
+            Apellidos
+          </label>
+          <input
+            id="lastName"
+            name="lastName"
+            className="input-control"
+            value={values.lastName}
+            onChange={(event) => setField('lastName', event.currentTarget.value)}
+            aria-invalid={errors.lastName ? 'true' : undefined}
+            aria-describedby={errors.lastName ? 'lastName-error' : undefined}
+            placeholder="Ej. López Ramírez"
+            required
+          />
+          {errors.lastName && (
+            <p id="lastName-error" className="field__error" role="alert">
+              {errors.lastName}
+            </p>
+          )}
+        </div>
+
+        <div className={`field${errors.birthDate ? ' field--error' : ''}`}>
+          <label htmlFor="birthDate" className="field__label">
+            Fecha de nacimiento
+          </label>
+          <input
+            id="birthDate"
+            name="birthDate"
+            className="input-control"
+            placeholder="DD/MM/AAAA"
+            value={values.birthDate}
+            onChange={(event) => setField('birthDate', event.currentTarget.value)}
+            onBlur={(event) => {
+              if (event.currentTarget.value && !parseBirthDate(event.currentTarget.value)) {
+                setErrors((prev) => ({ ...prev, birthDate: 'Usa el formato DD/MM/AAAA.' }));
+              }
+            }}
+            aria-invalid={errors.birthDate ? 'true' : undefined}
+            aria-describedby={errors.birthDate ? 'birthDate-error' : undefined}
+            inputMode="numeric"
+            required
+          />
+          {age !== null && (
+            <p className="field__hint" aria-live="polite">
+              Edad calculada: {age} año{age === 1 ? '' : 's'}
+            </p>
+          )}
+          {errors.birthDate && (
+            <p id="birthDate-error" className="field__error" role="alert">
+              {errors.birthDate}
+            </p>
+          )}
+        </div>
+
+        <div className={`field${errors.curp ? ' field--error' : ''}`}>
+          <label htmlFor="curp" className="field__label">
+            CURP
+          </label>
+          <input
+            id="curp"
+            name="curp"
+            className="input-control"
+            value={values.curp}
+            onChange={(event) => setField('curp', event.currentTarget.value.toUpperCase())}
+            onBlur={(event) => {
+              const curp = event.currentTarget.value.trim().toUpperCase();
+              if (curp && !CURP_REGEX.test(curp)) {
+                setErrors((prev) => ({ ...prev, curp: 'Verifica que la CURP tenga 18 caracteres válidos.' }));
+              }
+            }}
+            aria-invalid={errors.curp ? 'true' : undefined}
+            aria-describedby={errors.curp ? 'curp-error' : undefined}
+            placeholder="Ej. ABCD001231HDFRRS09"
+            required
+          />
+          {errors.curp && (
+            <p id="curp-error" className="field__error" role="alert">
+              {errors.curp}
+            </p>
+          )}
+        </div>
+
+        <div className={`field${errors.colony ? ' field--error' : ''}`}>
+          <label htmlFor="colony" className="field__label">
+            Colonia
+          </label>
+          <input
+            id="colony"
+            name="colony"
+            className="input-control"
+            value={values.colony}
+            onChange={(event) => setField('colony', event.currentTarget.value)}
+            aria-invalid={errors.colony ? 'true' : undefined}
+            aria-describedby={errors.colony ? 'colony-error' : undefined}
+            placeholder="Ej. Centro"
+            required
+          />
+          {errors.colony && (
+            <p id="colony-error" className="field__error" role="alert">
+              {errors.colony}
+            </p>
+          )}
+        </div>
+
+        <InputFile
+          label="Adjuntar INE"
+          value={values.ine}
+          onChange={(file) => {
+            setField('ine', file);
+            const error = validateFile(file, 'tu INE');
+            setErrors((prev) => ({ ...prev, ine: error }));
+          }}
+          accept={ACCEPTED_TYPES.join(',')}
+          required
+          error={errors.ine}
+          hint="Archivo PDF, JPG o PNG (máx. 2MB)"
+          name="ine"
+        />
+
+        <InputFile
+          label="Adjuntar Comprobante de domicilio"
+          value={values.addressProof}
+          onChange={(file) => {
+            setField('addressProof', file);
+            const error = validateFile(file, 'tu comprobante de domicilio');
+            setErrors((prev) => ({ ...prev, addressProof: error }));
+          }}
+          accept={ACCEPTED_TYPES.join(',')}
+          required
+          error={errors.addressProof}
+          hint="Archivo PDF, JPG o PNG (máx. 2MB)"
+          name="addressProof"
+        />
+
+        <InputFile
+          label="Adjuntar CURP"
+          value={values.curpDocument}
+          onChange={(file) => {
+            setField('curpDocument', file);
+            const error = validateFile(file, 'tu CURP');
+            setErrors((prev) => ({ ...prev, curpDocument: error }));
+          }}
+          accept={ACCEPTED_TYPES.join(',')}
+          required
+          error={errors.curpDocument}
+          hint="Archivo PDF, JPG o PNG (máx. 2MB)"
+          name="curpDocument"
+        />
+
+        <div className="checkbox">
+          <input
+            id="terms"
+            name="terms"
+            type="checkbox"
+            checked={values.terms}
+            onChange={(event) => setField('terms', event.currentTarget.checked)}
+            aria-invalid={errors.terms ? 'true' : undefined}
+            aria-describedby={errors.terms ? 'terms-error' : undefined}
+            required
+          />
+          <label htmlFor="terms">
+            Acepto los <a href="/docs/terminos" target="_blank" rel="noopener noreferrer">Términos y Condiciones</a> y el{' '}
+            <a href="/docs/privacidad" target="_blank" rel="noopener noreferrer">Aviso de Privacidad</a>.
+          </label>
+        </div>
+        {errors.terms && (
+          <p id="terms-error" className="field__error" role="alert">
+            {errors.terms}
+          </p>
+        )}
+
+        <button type="submit" className="btn btn-primary" disabled={loading}>
+          {loading ? 'Enviando…' : 'Finalizar registro'}
+        </button>
+      </form>
     </section>
   );
 }
