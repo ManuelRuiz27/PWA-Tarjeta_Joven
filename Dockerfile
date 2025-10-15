@@ -1,35 +1,20 @@
-# --- Build stage ---
-FROM node:20.16-alpine AS build
+FROM node:20-alpine AS base
 WORKDIR /app
 
-# Instala dependencias con versiones bloqueadas cuando hay lock
+FROM base AS deps
 COPY package.json package-lock.json* ./
-RUN if [ -f package-lock.json ]; then npm ci; else npm install; fi
+RUN npm install --legacy-peer-deps
 
-# Copia el resto del código
+FROM deps AS build
 COPY . .
-
-# Argumento opcional para Vite (no crítico si el código usa rutas absolutas /api)
-ARG VITE_API_BASE=/api
-ENV VITE_API_BASE=${VITE_API_BASE}
-
-# Compila
 RUN npm run build
 
-# --- Runtime stage ---
-FROM nginx:1.27.1-alpine AS runtime
-WORKDIR /usr/share/nginx/html
-
-# Copia build estático
-COPY --from=build /app/dist/ /usr/share/nginx/html/
-
-# Copia configuración de NGINX
-COPY deploy/nginx.conf /etc/nginx/conf.d/default.conf
-
-# Healthcheck simple contra endpoint de NGINX
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD wget -q -O - http://127.0.0.1/healthz || exit 1
-
-EXPOSE 80
-CMD ["nginx", "-g", "daemon off;"]
-
+FROM base AS production
+ENV NODE_ENV=production
+WORKDIR /app
+COPY --from=deps /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY prisma ./prisma
+COPY scripts ./scripts
+COPY package.json ./
+CMD ["node", "dist/main.js"]

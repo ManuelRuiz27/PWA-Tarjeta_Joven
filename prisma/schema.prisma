@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id              String            @id @default(cuid())
+  nombre          String
+  apellidos       String
+  curp            String            @unique
+  fechaNacimiento DateTime
+  colonia         String
+  telefono        String?
+  municipio       String?
+  isActive        Boolean           @default(true)
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+  otpRequests     OtpRequest[]
+  pushSubscriptions PushSubscription[]
+}
+
+model OtpRequest {
+  id        String   @id @default(cuid())
+  curp      String
+  codeHash  String
+  expiresAt DateTime
+  attempts  Int      @default(0)
+  resends   Int      @default(0)
+  createdAt DateTime @default(now())
+}
+
+model Merchant {
+  id          String   @id @default(cuid())
+  nombre      String
+  categoria   String
+  municipio   String
+  descuento   String
+  direccion   String
+  horario     String
+  descripcion String?
+  lat         Float?
+  lng         Float?
+  activo      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+}
+
+model PushSubscription {
+  id        String   @id @default(cuid())
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId    String
+  endpoint  String   @unique
+  p256dh    String
+  auth      String
+  createdAt DateTime @default(now())
+}

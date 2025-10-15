@@ -1,24 +1,27 @@
-version: "3.9"
+version: '3.9'
 services:
-  web:
-    build:
-      context: .
-      dockerfile: Dockerfile
-      args:
-        - VITE_API_BASE=/api
+  db:
+    image: postgres:15
+    restart: unless-stopped
     environment:
-      - VITE_API_BASE=/api
+      POSTGRES_DB: tjdb
+      POSTGRES_USER: tjuser
+      POSTGRES_PASSWORD: tjpass
     ports:
-      - "8080:80"
-    depends_on:
-      - backend
-    # Si hay backend en compose, nombrarlo "backend" escuchando en 8080
-    # y esta config ya hará el proxy /api -> backend:8080
-
+      - '5432:5432'
+    volumes:
+      - db-data:/var/lib/postgresql/data
   backend:
-    build:
-      context: ./deploy/mock-backend
-    command: node server.js
+    build: .
+    depends_on:
+      - db
+    env_file:
+      - .env
     ports:
-      - "8081:8080"
-    # Nota: expone 8081 en host solo para debug. Nginx habla con 'backend:8080' por red interna.
+      - '8080:8080'
+    command: sh -c "npx prisma migrate deploy && node dist/main.js"
+    volumes:
+      - ./.env:/app/.env:ro
+      - ./uploads:/app/uploads
+volumes:
+  db-data:
