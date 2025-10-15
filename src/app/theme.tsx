@@ -1,4 +1,6 @@
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
+import { useAppDispatch, useAppSelector } from './hooks';
+import { setTheme as setThemeAction } from '@features/settings/settingsSlice';
 
 export type Theme = 'light' | 'dark';
 
@@ -8,18 +10,22 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | undefined>(undefined);
-const STORAGE_KEY = 'app.theme';
-
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const [theme, setTheme] = useState<Theme>(() => (localStorage.getItem(STORAGE_KEY) as Theme) || 'light');
+  const dispatch = useAppDispatch();
+  const theme = useAppSelector((state) => state.settings.theme);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, theme);
     const root = document.documentElement;
     root.setAttribute('data-theme', theme);
   }, [theme]);
 
-  const value = useMemo(() => ({ theme, setTheme }), [theme]);
+  const value = useMemo(
+    () => ({
+      theme,
+      setTheme: (next: Theme) => dispatch(setThemeAction(next)),
+    }),
+    [dispatch, theme],
+  );
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
 }
 

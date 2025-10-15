@@ -7,11 +7,12 @@ import { initWalletQueueProcessor } from '@features/wallet/queue';
 import { I18nProvider } from './i18n';
 import { ThemeProvider } from './theme';
 import SWUpdatePrompt from '@app/components/SWUpdatePrompt';
-import InstallPrompt from '@app/components/InstallPrompt';
 import ErrorBoundary from '@app/components/ErrorBoundary';
 import ToastProvider from '@app/components/ToastProvider';
 import OfflineBanner from '@app/components/OfflineBanner';
 import AppRoutes from '@routes';
+import Onboarding from '@features/onboarding/Onboarding';
+import A2HSBanner from '../components/A2HSBanner';
 
 function App() {
   useEffect(() => {
@@ -27,7 +28,8 @@ function App() {
                 <AppRoutes />
                 <OfflineBanner />
                 <SWUpdatePrompt />
-                <InstallPrompt />
+                <Onboarding />
+                <A2HSBanner />
               </ErrorBoundary>
             </BrowserRouter>
           </ToastProvider>

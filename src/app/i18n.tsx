@@ -1,6 +1,8 @@
 import { IntlProvider } from 'react-intl';
-import React, { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import React, { createContext, useContext, useEffect, useMemo } from 'react';
 import { messages, type Locale } from '@i18n/messages';
+import { useAppDispatch, useAppSelector } from './hooks';
+import { setLocale as setLocaleAction } from '@features/settings/settingsSlice';
 
 interface I18nContextValue {
   locale: Locale;
@@ -9,17 +11,21 @@ interface I18nContextValue {
 
 const I18nContext = createContext<I18nContextValue | undefined>(undefined);
 
-const STORAGE_KEY = 'app.locale';
-
 export function I18nProvider({ children }: { children: React.ReactNode }) {
-  const [locale, setLocale] = useState<Locale>(() => (localStorage.getItem(STORAGE_KEY) as Locale) || 'es');
+  const dispatch = useAppDispatch();
+  const locale = useAppSelector((state) => state.settings.locale);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_KEY, locale);
     document.documentElement.lang = locale;
   }, [locale]);
 
-  const value = useMemo(() => ({ locale, setLocale }), [locale]);
+  const value = useMemo(
+    () => ({
+      locale,
+      setLocale: (next: Locale) => dispatch(setLocaleAction(next)),
+    }),
+    [dispatch, locale],
+  );
   return (
     <I18nContext.Provider value={value}>
       <IntlProvider locale={locale} messages={messages[locale]} defaultLocale="es">
