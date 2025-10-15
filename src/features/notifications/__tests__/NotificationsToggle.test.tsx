@@ -1,5 +1,6 @@
 import { describe, expect, it, vi, beforeEach } from 'vitest';
-import { render, screen, fireEvent } from '@testing-library/react';
+import { screen, fireEvent } from '@testing-library/react';
+import { renderWithProviders } from '@test/render';
 import NotificationsToggle from '../components/NotificationsToggle';
 
 function setupSupport(supported: boolean, permission: NotificationPermission) {
@@ -24,20 +25,20 @@ describe('NotificationsToggle', () => {
 
   it('muestra no soportado si el navegador no tiene Push', () => {
     setupSupport(false, 'default');
-    render(<NotificationsToggle />);
+    renderWithProviders(<NotificationsToggle />);
     expect(screen.getByText(/No soportado/)).toBeInTheDocument();
   });
 
   it('muestra permiso denegado si Notification.permission=denied', () => {
     setupSupport(true, 'denied');
-    render(<NotificationsToggle />);
+    renderWithProviders(<NotificationsToggle />);
     expect(screen.getByText(/Permiso denegado/)).toBeInTheDocument();
   });
 
   it('activa suscripción cuando se hace click y permiso es default', async () => {
     setupSupport(true, 'default');
-    render(<NotificationsToggle />);
-    const btn = screen.getByRole('button');
+    renderWithProviders(<NotificationsToggle />);
+    const btn = screen.getByRole('switch');
     await fireEvent.click(btn);
     expect(screen.getByText(/Suscripción/)).toBeInTheDocument();
   });
