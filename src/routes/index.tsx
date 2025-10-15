@@ -12,6 +12,7 @@ const Profile = lazy(() => import('@pages/Profile'));
 const Settings = lazy(() => import('@pages/Settings'));
 const Help = lazy(() => import('@pages/Help'));
 const Catalog = lazy(() => import('@pages/Catalog'));
+const MapPage = lazy(() => import('@pages/Map'));
 const Notifications = lazy(() => import('@pages/Notifications'));
 const NotFound = lazy(() => import('@pages/NotFound'));
 
@@ -21,6 +22,7 @@ export default function AppRoutes() {
       <Routes>
         <Route path="/" element={<Layout><Home /></Layout>} />
         <Route path="/catalog" element={<Layout><Catalog /></Layout>} />
+        <Route path="/map" element={<Layout><MapPage /></Layout>} />
         <Route path="/login" element={<Layout><Login /></Layout>} />
         <Route path="/register" element={<Layout><Register /></Layout>} />
         {/* Rutas protegidas */}
