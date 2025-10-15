@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import { FormattedMessage } from 'react-intl';
+import { track } from '@lib/analytics';
 
 interface BeforeInstallPromptEvent extends Event {
   readonly platforms: string[];
@@ -57,6 +58,7 @@ export default function A2HSBanner() {
 
     function handleAppInstalled() {
       hideBanner();
+      void track('installed', { source: 'a2hs' });
     }
 
     window.addEventListener('beforeinstallprompt', handleBeforeInstall);
@@ -121,6 +123,7 @@ export default function A2HSBanner() {
             className="btn btn-primary"
             onClick={async () => {
               try {
+                void track('install_click', { source: 'a2hs' });
                 await promptEvent.prompt();
                 if (promptEvent.userChoice) {
                   await promptEvent.userChoice.catch(() => undefined);

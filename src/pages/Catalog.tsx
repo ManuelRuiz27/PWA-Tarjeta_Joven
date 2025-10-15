@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import BenefitCard from '../components/BenefitCard';
@@ -7,6 +7,7 @@ import MerchantModal from '../components/MerchantModal';
 import ErrorState from '@app/components/ErrorState';
 import type { CatalogItem } from '@features/catalog/types';
 import { useGetCatalogQuery, useLazyGetMerchantQuery } from '@features/catalog/catalogSlice';
+import { track } from '@lib/analytics';
 
 const DEFAULT_CATEGORY = 'todos';
 const DEFAULT_MUNICIPALITY = 'todos';
@@ -44,6 +45,8 @@ export default function CatalogPage() {
   const [searchValue, setSearchValue] = useState(params.get('q') ?? '');
   const [selectedBenefit, setSelectedBenefit] = useState<CatalogItem | null>(null);
   const [fetchMerchant, { data: merchantData, isFetching: isMerchantLoading }] = useLazyGetMerchantQuery();
+  const filtersRef = useRef<{ category: string; municipality: string } | null>(null);
+  const searchRef = useRef<{ query: string; count: number } | null>(null);
 
   const categoryParam = params.get('categoria');
   const municipalityParam = params.get('municipio');
@@ -68,6 +71,45 @@ export default function CatalogPage() {
 
   const items = data?.items ?? [];
   const totalPages = Math.max(1, data?.totalPages ?? 1);
+
+  useEffect(() => {
+    const nextFilters = { category: currentCategory, municipality: currentMunicipality };
+    if (!filtersRef.current) {
+      filtersRef.current = nextFilters;
+      return;
+    }
+    const prev = filtersRef.current;
+    const changed = prev.category !== nextFilters.category || prev.municipality !== nextFilters.municipality;
+    if (changed) {
+      filtersRef.current = nextFilters;
+      void track('filter', {
+        source: 'catalog',
+        category: currentCategory,
+        municipality: currentMunicipality,
+      });
+    }
+  }, [currentCategory, currentMunicipality]);
+
+  useEffect(() => {
+    const normalized = currentQuery.trim();
+    const state = searchRef.current;
+    if (!state) {
+      searchRef.current = { query: normalized, count: items.length };
+      return;
+    }
+    const queryChanged = state.query !== normalized;
+    const countChanged = state.count !== items.length;
+    if (!queryChanged && !countChanged) return;
+    searchRef.current = { query: normalized, count: items.length };
+    if (!normalized) {
+      return;
+    }
+    void track('search', {
+      source: 'catalog',
+      query: normalized,
+      results: items.length,
+    });
+  }, [currentQuery, items.length]);
 
   const categoryOptions = useMemo<FilterChipOption[]>(() => {
     const fromFilters = data?.filters?.categories ?? [];
@@ -124,10 +166,11 @@ export default function CatalogPage() {
     [updateParams]
   );
 
-  const handleClearFilters = useCallback(() => {
-    setSearchValue('');
-    updateParams({ categoria: null, municipio: null, q: null, page: '1' });
-  }, [updateParams]);
+    const handleClearFilters = useCallback(() => {
+      setSearchValue('');
+      updateParams({ categoria: null, municipio: null, q: null, page: '1' });
+      void track('filter', { source: 'catalog', action: 'clear' });
+    }, [updateParams]);
 
   const handlePageChange = useCallback(
     (nextPage: number) => {
@@ -145,6 +188,12 @@ export default function CatalogPage() {
       if (benefit.merchantId) {
         fetchMerchant(benefit.merchantId);
       }
+      void track('open_merchant', {
+        source: 'catalog',
+        merchantId: benefit.merchantId ?? benefit.id,
+        category: benefit.category,
+        municipality: benefit.municipality,
+      });
     },
     [fetchMerchant]
   );

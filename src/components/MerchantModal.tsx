@@ -4,6 +4,7 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { MapPin, Clock3, FileText, X } from 'lucide-react';
 import Modal from '@app/components/Modal';
 import type { CatalogItem, Merchant } from '@features/catalog/types';
+import { track } from '@lib/analytics';
 
 export interface MerchantModalProps {
   isOpen: boolean;
@@ -73,6 +74,15 @@ export default function MerchantModal({ isOpen, onClose, baseInfo, merchant, isL
                 className="btn btn-success"
                 style={{ pointerEvents: mapUrl ? 'auto' : 'none', opacity: mapUrl ? 1 : 0.6 }}
                 aria-disabled={!mapUrl}
+                onClick={() => {
+                  if (!mapUrl) return;
+                  const merchantId = details?.id ?? baseInfo?.merchantId ?? baseInfo?.id;
+                  void track('open_merchant', {
+                    source: 'catalog',
+                    action: 'maps_link',
+                    merchantId,
+                  });
+                }}
               >
                 Cómo llegar
               </a>

@@ -1,5 +1,6 @@
 import { useMemo } from 'react';
 import type { CatalogItem } from '@features/catalog/types';
+import { track } from '@lib/analytics';
 
 export interface MapCardProps {
   item: CatalogItem;
@@ -48,6 +49,13 @@ export default function MapCard({ item, isActive, onSelect }: MapCardProps) {
         rel="noopener noreferrer"
         className="btn btn-secondary"
         style={mapsButtonStyles}
+        onClick={() => {
+          void track('open_merchant', {
+            source: 'map',
+            action: 'maps_link',
+            merchantId: item.merchantId ?? item.id,
+          });
+        }}
       >
         Ver en Google Maps
       </a>

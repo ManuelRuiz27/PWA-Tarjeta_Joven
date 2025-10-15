@@ -13,7 +13,7 @@ export default class ErrorBoundary extends React.Component<{ children: React.Rea
   }
 
   componentDidCatch(error: any, info: any) {
-    // Ya tenemos Sentry inicializado en @app/sentry
+    // Ya tenemos Sentry inicializado en @lib/sentry
     // Podemos añadir logs aquí si se requiere.
   }
 

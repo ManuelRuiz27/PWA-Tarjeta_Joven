@@ -32,7 +32,8 @@ a:focus-visible,
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: none;
+  outline: var(--focus-outline-width, 3px) solid var(--focus-outline-color, #588f41);
+  outline-offset: 2px;
   box-shadow: var(--focus-ring);
 }
 
