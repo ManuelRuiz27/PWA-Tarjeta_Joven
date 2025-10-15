@@ -3,7 +3,9 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import Wallet from '@pages/Wallet';
 
 describe('Flujo Wallet', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('carga lista y permite añadir cupón de demo', async () => {
     // Primera llamada GET /api/wallet

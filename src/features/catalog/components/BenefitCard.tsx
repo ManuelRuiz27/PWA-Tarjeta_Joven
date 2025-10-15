@@ -5,8 +5,9 @@ interface Props {
 }
 
 export default function BenefitCard({ item }: Props) {
-  const until = new Date(item.validUntil);
-  const untilFmt = isNaN(until.getTime()) ? item.validUntil : until.toLocaleDateString();
+  const validUntil = item.validUntil ?? '';
+  const until = validUntil ? new Date(validUntil) : null;
+  const untilFmt = until && !isNaN(until.getTime()) ? until.toLocaleDateString() : (validUntil || '—');
   return (
     <article
       role="article"

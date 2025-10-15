@@ -60,7 +60,11 @@ export default function FileUploader({
       const res = await fetch('/api/files', { method: 'POST', body: fd });
       if (!res.ok) throw new Error(await res.text().catch(() => 'Error al subir archivo'));
       const data = (await res.json()) as { file_id: string; url?: string };
-      onUploaded?.({ fileId: data.file_id, file: f, url: data.url });
+      const payload: { fileId: string; file: File; url?: string } = { fileId: data.file_id, file: f };
+      if (typeof data.url === 'string') {
+        payload.url = data.url;
+      }
+      onUploaded?.(payload);
     } catch (e: any) {
       setError(e?.message || 'Error al subir archivo');
     } finally {

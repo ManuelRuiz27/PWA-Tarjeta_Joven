@@ -16,7 +16,11 @@ export default function NotificationsList({ items, onToggleRead }: Notifications
   return (
     <ul className="list-group" role="list" aria-label="Notificaciones">
       {items.map((n) => (
-        <NotificationItem key={n.id} item={n} onToggleRead={onToggleRead} />
+        <NotificationItem
+          key={n.id}
+          item={n}
+          {...(onToggleRead ? { onToggleRead } : {})}
+        />
       ))}
     </ul>
   );

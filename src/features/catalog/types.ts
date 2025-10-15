@@ -38,3 +38,14 @@ export interface Merchant {
   longitude?: number;
 }
 
+export interface Benefit {
+  id: string;
+  title: string;
+  imageUrl: string;
+  terms: string;
+  validUntil?: string;
+  merchantId?: string;
+  category?: string;
+  discount?: string;
+}
+

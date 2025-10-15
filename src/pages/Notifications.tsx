@@ -38,7 +38,7 @@ export default function NotificationsPage() {
   async function doSubscribe() {
     setError(null);
     if (!supported || permission !== 'granted') return;
-    const vapid = import.meta.env.VITE_VAPID_PUBLIC_KEY as string | undefined;
+    const vapid = import.meta.env['VITE_VAPID_PUBLIC_KEY'];
     if (!vapid) {
       setError('Falta VAPID public key (VITE_VAPID_PUBLIC_KEY)');
       return;

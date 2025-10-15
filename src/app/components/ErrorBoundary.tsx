@@ -1,23 +1,23 @@
 import React from 'react';
 
-interface State { hasError: boolean; error?: any }
+interface State { hasError: boolean; error?: unknown }
 
 /**
  * Captura errores de render y muestra un fallback, indicando si no hay conexión.
  */
 export default class ErrorBoundary extends React.Component<{ children: React.ReactNode }, State> {
-  state: State = { hasError: false };
+  override state: Readonly<State> = { hasError: false };
 
-  static getDerivedStateFromError(error: any) {
+  static getDerivedStateFromError(error: unknown): State {
     return { hasError: true, error };
   }
 
-  componentDidCatch(error: any, info: any) {
+  override componentDidCatch(error: unknown, info: React.ErrorInfo) {
     // Ya tenemos Sentry inicializado en @lib/sentry
     // Podemos añadir logs aquí si se requiere.
   }
 
-  render() {
+  override render(): React.ReactNode {
     if (this.state.hasError) {
       const offline = typeof navigator !== 'undefined' && navigator.onLine === false;
       return (

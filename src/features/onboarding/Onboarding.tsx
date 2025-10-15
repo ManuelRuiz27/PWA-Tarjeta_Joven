@@ -99,6 +99,7 @@ export default function Onboarding() {
   const currentStep = steps[stepIndex];
 
   if (!visible) return null;
+  if (!currentStep) return null;
 
   function completeOnboarding() {
     persistFlag();

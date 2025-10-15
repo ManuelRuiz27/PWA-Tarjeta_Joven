@@ -1,5 +1,5 @@
 import { ChangeEvent } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type MotionStyle } from 'framer-motion';
 import { XCircle } from 'lucide-react';
 
 export interface FilterChipOption {
@@ -161,7 +161,7 @@ const chipsRowStyles: React.CSSProperties = {
   paddingBottom: 4,
 };
 
-const chipBaseStyles: React.CSSProperties = {
+const chipBaseStyles: MotionStyle = {
   border: '1px solid rgba(100, 116, 139, 0.35)',
   padding: '8px 14px',
   borderRadius: 999,
@@ -173,7 +173,7 @@ const chipBaseStyles: React.CSSProperties = {
   cursor: 'pointer',
 };
 
-const chipActiveStyles: React.CSSProperties = {
+const chipActiveStyles: MotionStyle = {
   background: 'linear-gradient(135deg, #22c55e, #16a34a)',
   color: '#fff',
   borderColor: 'transparent',

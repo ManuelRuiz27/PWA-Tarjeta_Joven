@@ -23,7 +23,9 @@ function setupSupported(permission: NotificationPermission, subscribed = false) 
 }
 
 describe('NotificationsPage', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('muestra mensaje de no soporte', () => {
     (globalThis as any).Notification = undefined;

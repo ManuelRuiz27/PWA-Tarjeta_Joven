@@ -21,7 +21,7 @@ function App() {
   }, []);
   useEffect(() => {
     const locale = typeof navigator !== 'undefined' ? navigator.language : 'unknown';
-    const version = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? undefined;
+    const version = import.meta.env['VITE_APP_VERSION'];
     void track('open_app', { locale, version });
   }, []);
   return (

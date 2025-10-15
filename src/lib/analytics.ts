@@ -19,8 +19,10 @@ export interface AnalyticsEvent {
 
 const eventBuffer: AnalyticsEvent[] = [];
 
-const endpoint = (import.meta.env.VITE_ANALYTICS_URL as string | undefined) ?? '/api/analytics';
-const mode = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env.MODE : undefined;
+const endpoint = (typeof import.meta !== 'undefined' && import.meta.env
+  ? import.meta.env['VITE_ANALYTICS_URL']
+  : undefined) ?? '/api/analytics';
+const mode = typeof import.meta !== 'undefined' && import.meta.env ? import.meta.env['MODE'] : undefined;
 const isTestEnvironment = mode === 'test';
 
 function isBrowser() {
@@ -64,8 +66,8 @@ function recordLocally(event: AnalyticsEvent) {
 export async function track(event: AnalyticsEventName, payload?: AnalyticsPayload) {
   const analyticsEvent: AnalyticsEvent = {
     event,
-    payload,
     timestamp: new Date().toISOString(),
+    ...(payload !== undefined ? { payload } : {}),
   };
 
   if (!isBrowser() || isTestEnvironment || !endpoint) {

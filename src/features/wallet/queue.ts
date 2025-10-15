@@ -20,7 +20,13 @@ function backoffDelay(attempt: number) {
 }
 
 export async function enqueuePost(url: string, body?: any, headers?: Record<string, string>) {
-  await queueAdd({ url, method: 'POST', body, headers });
+  const payload: Omit<QueueItem, 'attempts' | 'nextTryAt'> = {
+    url,
+    method: 'POST',
+    ...(body !== undefined ? { body } : {}),
+    ...(headers ? { headers } : {}),
+  };
+  await queueAdd(payload);
 }
 
 export async function processQueue(now = Date.now()) {
@@ -33,8 +39,8 @@ export async function processQueue(now = Date.now()) {
       try {
         const res = await fetch(item.url, {
           method: item.method,
-          headers: { 'Content-Type': 'application/json', ...(item.headers || {}) },
-          body: item.body ? JSON.stringify(item.body) : undefined,
+          headers: { 'Content-Type': 'application/json', ...(item.headers ?? {}) },
+          body: item.body !== undefined ? JSON.stringify(item.body) : null,
         });
         if (!res.ok) throw new Error('HTTP ' + res.status);
         await queueDelete((item as any).id);

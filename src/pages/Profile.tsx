@@ -36,6 +36,7 @@ export default function Profile() {
   const [documents, setDocuments] = useState<DocumentItem[]>([]);
 
   const errorsRef = useRef<HTMLDivElement | null>(null);
+  const { show } = useToast();
 
   useEffect(() => {
     // Carga inicial (mock): lee de localStorage para notificaciones
@@ -45,9 +46,9 @@ export default function Profile() {
 
   function validateProfile() {
     const e: Record<string, string> = {};
-    if (!profile.name.trim()) e.name = 'El nombre es obligatorio.';
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) e.email = 'Email inválido.';
-    if (!/^\+?\d{10,15}$/.test(profile.phone)) e.phone = 'Teléfono inválido.';
+    if (!profile.name.trim()) e['name'] = 'El nombre es obligatorio.';
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(profile.email)) e['email'] = 'Email inválido.';
+    if (!/^\+?\d{10,15}$/.test(profile.phone)) e['phone'] = 'Teléfono inválido.';
     setProfileError(Object.values(e)[0] || null);
     if (Object.keys(e).length) {
       setTimeout(() => errorsRef.current?.focus(), 0);
@@ -92,8 +93,8 @@ export default function Profile() {
   }
 
   function onFileUploaded({ fileId, file, url }: { fileId: string; file: File; url?: string }) {
-    const doc = { fileId, name: file.name, url };
-    setDocuments((prev) => prev.concat(doc));
+    const doc: DocumentItem = url ? { fileId, name: file.name, url } : { fileId, name: file.name };
+    setDocuments((prev) => [...prev, doc]);
     show('Documento registrado', { variant: 'success' });
     // Notifica al backend que el documento fue subido y asociado al perfil
     fetch('/api/profile/documents', {
@@ -174,7 +175,6 @@ export default function Profile() {
           ))}
         </ul>
       )}
-  const { show } = useToast();
     </section>
   );
 }

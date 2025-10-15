@@ -79,7 +79,8 @@ export default function CardMerchant({ merchant, benefits = [], to, onSelectBene
   );
 }
 
-function fmtDate(iso: string) {
+function fmtDate(iso?: string) {
+  if (!iso) return '—';
   const d = new Date(iso);
   return isNaN(d.getTime()) ? iso : d.toLocaleDateString();
 }

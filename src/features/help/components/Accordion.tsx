@@ -48,7 +48,11 @@ export default function Accordion({ items }: AccordionProps) {
   return (
     <div aria-label="Preguntas frecuentes">
       {items.map((it, i) => (
-        <AccordionItem key={i} title={it.title} defaultOpen={it.defaultOpen}>
+        <AccordionItem
+          key={i}
+          title={it.title}
+          {...(it.defaultOpen !== undefined ? { defaultOpen: it.defaultOpen } : {})}
+        >
           {it.content}
         </AccordionItem>
       ))}

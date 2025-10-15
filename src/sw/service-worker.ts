@@ -7,8 +7,11 @@ import { NetworkFirst, CacheFirst, NetworkOnly } from 'workbox-strategies';
 import { ExpirationPlugin } from 'workbox-expiration';
 import { CacheableResponsePlugin } from 'workbox-cacheable-response';
 import { BackgroundSyncPlugin } from 'workbox-background-sync';
+import type { WorkboxPlugin } from 'workbox-core/types';
 
 declare let self: ServiceWorkerGlobalScope & { __WB_MANIFEST: any };
+
+const asWorkboxPlugin = (plugin: unknown): WorkboxPlugin => plugin as WorkboxPlugin;
 
 // Precache generado por Workbox (injectManifest)
 precacheAndRoute(self.__WB_MANIFEST);
@@ -20,8 +23,8 @@ registerRoute(
   new CacheFirst({
     cacheName: 'images-cache',
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 }) // 30 días
+      asWorkboxPlugin(new CacheableResponsePlugin({ statuses: [0, 200] })),
+      asWorkboxPlugin(new ExpirationPlugin({ maxEntries: 60, maxAgeSeconds: 60 * 60 * 24 * 30 })) // 30 días
     ]
   })
 );
@@ -33,16 +36,16 @@ registerRoute(
     cacheName: 'api-catalog',
     networkTimeoutSeconds: 10,
     plugins: [
-      new CacheableResponsePlugin({ statuses: [0, 200] }),
-      new ExpirationPlugin({ maxAgeSeconds: 60 * 60 * 24 }) // 24 horas
+      asWorkboxPlugin(new CacheableResponsePlugin({ statuses: [0, 200] })),
+      asWorkboxPlugin(new ExpirationPlugin({ maxAgeSeconds: 60 * 60 * 24 })) // 24 horas
     ]
   })
 );
 
 // Background Sync para POST de wallet (guardar/redimir)
-const walletBgSync = new BackgroundSyncPlugin('wallet-queue', {
+const walletBgSync = asWorkboxPlugin(new BackgroundSyncPlugin('wallet-queue', {
   maxRetentionTime: 24 * 60, // minutos
-});
+}));
 
 registerRoute(
   ({ url, request }) => request.method === 'POST' && url.pathname.startsWith('/api/wallet'),

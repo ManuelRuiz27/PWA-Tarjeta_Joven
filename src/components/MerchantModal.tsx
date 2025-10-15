@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import type { ReactNode } from 'react';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type MotionStyle } from 'framer-motion';
 import { MapPin, Clock3, FileText, X } from 'lucide-react';
 import Modal from '@app/components/Modal';
 import type { CatalogItem, Merchant } from '@features/catalog/types';
@@ -133,7 +133,7 @@ function mergeDetails(baseInfo?: CatalogItem | null, merchant?: Merchant | null)
   };
 }
 
-const modalContentStyles: React.CSSProperties = {
+const modalContentStyles: MotionStyle = {
   padding: 24,
   display: 'flex',
   flexDirection: 'column',
@@ -226,7 +226,7 @@ const footerStyles: React.CSSProperties = {
   justifyContent: 'flex-end',
 };
 
-const loadingOverlayStyles: React.CSSProperties = {
+const loadingOverlayStyles: MotionStyle = {
   position: 'absolute',
   inset: 0,
   borderRadius: 12,

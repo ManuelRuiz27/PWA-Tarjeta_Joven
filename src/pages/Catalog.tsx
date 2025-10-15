@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { AnimatePresence, motion, type MotionStyle } from 'framer-motion';
 import BenefitCard from '../components/BenefitCard';
 import FilterChips, { type FilterChipOption } from '../components/FilterChips';
 import MerchantModal from '../components/MerchantModal';
 import ErrorState from '@app/components/ErrorState';
 import type { CatalogItem } from '@features/catalog/types';
-import { useGetCatalogQuery, useLazyGetMerchantQuery } from '@features/catalog/catalogSlice';
+import { useGetCatalogQuery, useLazyGetMerchantQuery, type CatalogQueryParams } from '@features/catalog/catalogSlice';
 import { track } from '@lib/analytics';
 
 const DEFAULT_CATEGORY = 'todos';
@@ -62,12 +62,14 @@ export default function CatalogPage() {
     setSearchValue(currentQuery);
   }, [currentQuery]);
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useGetCatalogQuery({
-    category: currentCategory === DEFAULT_CATEGORY ? undefined : currentCategory,
-    municipality: currentMunicipality === DEFAULT_MUNICIPALITY ? undefined : currentMunicipality,
-    q: currentQuery || undefined,
+  const catalogQueryArgs: CatalogQueryParams = {
     page: currentPage,
-  });
+    ...(currentCategory === DEFAULT_CATEGORY ? {} : { category: currentCategory }),
+    ...(currentMunicipality === DEFAULT_MUNICIPALITY ? {} : { municipality: currentMunicipality }),
+    ...(currentQuery ? { q: currentQuery } : {}),
+  };
+
+  const { data, isLoading, isFetching, isError, error, refetch } = useGetCatalogQuery(catalogQueryArgs);
 
   const items = data?.items ?? [];
   const totalPages = Math.max(1, data?.totalPages ?? 1);
@@ -323,7 +325,7 @@ export default function CatalogPage() {
         isOpen={Boolean(selectedBenefit)}
         onClose={closeModal}
         baseInfo={selectedBenefit}
-        merchant={merchantData ?? undefined}
+        merchant={merchantData ?? null}
         isLoading={isMerchantLoading}
       />
     </section>
@@ -365,13 +367,13 @@ const subtitleStyles: React.CSSProperties = {
   maxWidth: 520,
 };
 
-const gridStyles: React.CSSProperties = {
+const gridStyles: MotionStyle = {
   display: 'grid',
   gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
   gap: 16,
 };
 
-const skeletonCardStyles: React.CSSProperties = {
+const skeletonCardStyles: MotionStyle = {
   background: 'linear-gradient(135deg, rgba(226, 232, 240, 0.7), rgba(203, 213, 225, 0.9))',
   borderRadius: 18,
   minHeight: 200,
@@ -393,7 +395,7 @@ const paginationLabelStyles: React.CSSProperties = {
   gap: 8,
 };
 
-const loadingDotStyles: React.CSSProperties = {
+const loadingDotStyles: MotionStyle = {
   width: 8,
   height: 8,
   background: 'var(--color-accent, #22c55e)',
@@ -401,7 +403,7 @@ const loadingDotStyles: React.CSSProperties = {
   display: 'inline-block',
 };
 
-const emptyStateStyles: React.CSSProperties = {
+const emptyStateStyles: MotionStyle = {
   display: 'grid',
   placeItems: 'center',
   textAlign: 'center',

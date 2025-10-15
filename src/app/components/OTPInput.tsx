@@ -41,13 +41,13 @@ export default function OTPInput({ length = 6, disabled = false, onComplete, ari
     const d = v.replace(/\D/g, '');
     if (!d) return;
     const next = [...values];
-    next[i] = d[0] ?? '';
+    next[i] = d.charAt(0);
     setValues(next);
     if (d.length > 1) {
       // Si se pegaron varios dígitos, propaga
       let idx = i + 1;
       for (let k = 1; k < d.length && idx < length; k++, idx++) {
-        next[idx] = d[k];
+        next[idx] = d.charAt(k);
       }
       setValues([...next]);
       focusIndex(Math.min(length - 1, i + d.length));
@@ -86,7 +86,7 @@ export default function OTPInput({ length = 6, disabled = false, onComplete, ari
     e.preventDefault();
     const next = [...values];
     let idx = i;
-    for (let k = 0; k < text.length && idx < length; k++, idx++) next[idx] = text[k];
+    for (let k = 0; k < text.length && idx < length; k++, idx++) next[idx] = text.charAt(k);
     setValues(next);
     focusIndex(Math.min(length - 1, i + text.length));
   }
@@ -102,7 +102,7 @@ export default function OTPInput({ length = 6, disabled = false, onComplete, ari
           pattern="\\d*"
           className="form-control text-center"
           style={{ width: 40 }}
-          value={values[i]}
+          value={values[i] ?? ''}
           onChange={(e) => handleChange(i, e.currentTarget.value)}
           onKeyDown={(e) => handleKeyDown(i, e)}
           onPaste={(e) => handlePaste(i, e)}

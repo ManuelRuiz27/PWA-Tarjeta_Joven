@@ -9,8 +9,8 @@ export default defineConfig({
     react(),
     VitePWA({
       strategies: 'injectManifest',
-      srcDir: 'src',
-      filename: 'sw/service-worker.ts',
+      srcDir: 'src/sw',
+      filename: 'service-worker.ts',
       registerType: 'autoUpdate',
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,ico,png,svg}']
@@ -20,22 +20,28 @@ export default defineConfig({
       }
     }),
     // Sentry sourcemaps upload (solo si variables están definidas en build CI)
-    sentryVitePlugin({
-      org: process.env.SENTRY_ORG,
-      project: process.env.SENTRY_PROJECT,
-      // authToken debe llegar del entorno del CI (no lo guardes en el repo)
-      authToken: process.env.SENTRY_AUTH_TOKEN,
-      disable: !process.env.SENTRY_AUTH_TOKEN,
-      sourcemaps: {
-        filesToDeleteAfterUpload: ['dist/**/*.map']
-      }
-    })
+    sentryVitePlugin((() => {
+      const sentryOrg = process.env['SENTRY_ORG'];
+      const sentryProject = process.env['SENTRY_PROJECT'];
+      const sentryAuthToken = process.env['SENTRY_AUTH_TOKEN'];
+      return {
+        ...(sentryOrg ? { org: sentryOrg } : {}),
+        ...(sentryProject ? { project: sentryProject } : {}),
+        // authToken debe llegar del entorno del CI (no lo guardes en el repo)
+        ...(sentryAuthToken ? { authToken: sentryAuthToken } : {}),
+        disable: !sentryAuthToken,
+        sourcemaps: {
+          filesToDeleteAfterUpload: ['dist/**/*.map']
+        }
+      };
+    })())
   ],
   resolve: {
     alias: {
       '@app': path.resolve(__dirname, 'src/app'),
       '@features': path.resolve(__dirname, 'src/features'),
       '@pages': path.resolve(__dirname, 'src/pages'),
+      '@components': path.resolve(__dirname, 'src/components'),
       '@routes': path.resolve(__dirname, 'src/routes'),
       '@lib': path.resolve(__dirname, 'src/lib'),
       '@sw': path.resolve(__dirname, 'src/sw'),

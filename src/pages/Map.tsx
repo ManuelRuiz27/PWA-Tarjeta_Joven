@@ -3,7 +3,7 @@ import { useSearchParams } from 'react-router-dom';
 import MapCard from '@components/MapCard';
 import ErrorState from '@app/components/ErrorState';
 import type { CatalogItem } from '@features/catalog/types';
-import { useGetCatalogQuery } from '@features/catalog/catalogSlice';
+import { useGetCatalogQuery, type CatalogQueryParams } from '@features/catalog/catalogSlice';
 import { track } from '@lib/analytics';
 
 const DEFAULT_CATEGORY = 'todos';
@@ -113,11 +113,13 @@ export default function MapPage() {
   const currentCategory = normalizeParam(categoryParam, DEFAULT_CATEGORY);
   const currentMunicipality = normalizeParam(municipalityParam, DEFAULT_MUNICIPALITY);
 
-  const { data, isLoading, isFetching, isError, error, refetch } = useGetCatalogQuery({
-    category: currentCategory === DEFAULT_CATEGORY ? undefined : currentCategory,
-    municipality: currentMunicipality === DEFAULT_MUNICIPALITY ? undefined : currentMunicipality,
+  const catalogQueryArgs: CatalogQueryParams = {
     page: 1,
-  });
+    ...(currentCategory === DEFAULT_CATEGORY ? {} : { category: currentCategory }),
+    ...(currentMunicipality === DEFAULT_MUNICIPALITY ? {} : { municipality: currentMunicipality }),
+  };
+
+  const { data, isLoading, isFetching, isError, error, refetch } = useGetCatalogQuery(catalogQueryArgs);
 
   const items = useMemo(() => data?.items ?? [], [data]);
 
@@ -156,7 +158,10 @@ export default function MapPage() {
       setSelectedItem(null);
       return;
     }
-    setSelectedItem(items[0]);
+    const [firstItem] = items;
+    if (firstItem) {
+      setSelectedItem(firstItem);
+    }
   }, [items, selectedItem]);
 
   const categoryOptions = useMemo(() => {
@@ -220,7 +225,9 @@ export default function MapPage() {
     []
   );
 
-  const mapBaseUrl = import.meta.env.VITE_MAPS_URL as string | undefined;
+  const defaultMyMapsUrl =
+    'https://www.google.com/maps/d/u/0/embed?mid=1Am2-NMQ95WxJDxw7DmngYmkJw-h1GX4&ehbc=2E312F&noprof=1';
+  const mapBaseUrl = (import.meta.env['VITE_MAPS_URL'] as string | undefined) ?? defaultMyMapsUrl;
 
   const mapUrl = useMemo(() => {
     if (!mapBaseUrl) return undefined;
@@ -329,11 +336,7 @@ export default function MapPage() {
               <div style={offlineStyles} role="status" aria-live="assertive">
                 Mapa no disponible sin conexión
               </div>
-            ) : !mapBaseUrl ? (
-              <div style={offlineStyles} role="status">
-                Configura la variable VITE_MAPS_URL para mostrar el mapa.
-              </div>
-            ) : (
+            ) : mapUrl ? (
               <iframe
                 key={mapUrl}
                 title="Mapa de comercios"
@@ -343,6 +346,10 @@ export default function MapPage() {
                 style={iframeStyles}
                 referrerPolicy="no-referrer-when-downgrade"
               />
+            ) : (
+              <div style={offlineStyles} role="status">
+                No fue posible cargar el mapa en este momento.
+              </div>
             )}
           </div>
 

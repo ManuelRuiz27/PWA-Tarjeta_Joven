@@ -1,5 +1,5 @@
 import { memo } from 'react';
-import { motion } from 'framer-motion';
+import { motion, type MotionStyle } from 'framer-motion';
 import { Tag, MapPin } from 'lucide-react';
 import type { CatalogItem } from '@features/catalog/types';
 
@@ -71,7 +71,7 @@ function BenefitCardComponent({ benefit, onSelect, index = 0 }: BenefitCardProps
   );
 }
 
-const cardStyles: React.CSSProperties = {
+const cardStyles: MotionStyle = {
   background: 'var(--color-surface, #ffffff)',
   borderRadius: 16,
   padding: 16,

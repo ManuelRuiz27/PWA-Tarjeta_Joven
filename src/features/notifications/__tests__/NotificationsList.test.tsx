@@ -19,6 +19,7 @@ describe('NotificationsList', () => {
     const onToggle = vi.fn();
     render(<NotificationsList items={items as any} onToggleRead={onToggle} />);
     const firstSwitch = screen.getAllByRole('switch')[0];
+    if (!firstSwitch) throw new Error('Switch not found');
     fireEvent.click(firstSwitch);
     expect(onToggle).toHaveBeenCalledWith('n1', true);
   });

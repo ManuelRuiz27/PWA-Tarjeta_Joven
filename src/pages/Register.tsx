@@ -89,7 +89,12 @@ export default function Register() {
 
   function setField<K extends keyof RegisterFormValues>(key: K, value: RegisterFormValues[K]) {
     setValues((prev) => ({ ...prev, [key]: value }));
-    setErrors((prev) => ({ ...prev, [key]: undefined }));
+    setErrors((prev) => {
+      if (!(key in prev)) return prev;
+      const next = { ...prev };
+      delete next[key];
+      return next;
+    });
   }
 
   function validateAll(): boolean {
@@ -313,14 +318,22 @@ export default function Register() {
         <InputFile
           label="Adjuntar INE"
           value={values.ine}
-          onChange={(file) => {
+          onChange={(file: File | null) => {
             setField('ine', file);
             const error = validateFile(file, 'tu INE');
-            setErrors((prev) => ({ ...prev, ine: error }));
+            setErrors((prev) => {
+              const next = { ...prev };
+              if (error) {
+                next.ine = error;
+              } else {
+                delete next.ine;
+              }
+              return next;
+            });
           }}
           accept={ACCEPTED_TYPES.join(',')}
           required
-          error={errors.ine}
+          {...(errors.ine ? { error: errors.ine } : {})}
           hint="Archivo PDF, JPG o PNG (máx. 2MB)"
           name="ine"
         />
@@ -328,14 +341,22 @@ export default function Register() {
         <InputFile
           label="Adjuntar Comprobante de domicilio"
           value={values.addressProof}
-          onChange={(file) => {
+          onChange={(file: File | null) => {
             setField('addressProof', file);
             const error = validateFile(file, 'tu comprobante de domicilio');
-            setErrors((prev) => ({ ...prev, addressProof: error }));
+            setErrors((prev) => {
+              const next = { ...prev };
+              if (error) {
+                next.addressProof = error;
+              } else {
+                delete next.addressProof;
+              }
+              return next;
+            });
           }}
           accept={ACCEPTED_TYPES.join(',')}
           required
-          error={errors.addressProof}
+          {...(errors.addressProof ? { error: errors.addressProof } : {})}
           hint="Archivo PDF, JPG o PNG (máx. 2MB)"
           name="addressProof"
         />
@@ -343,14 +364,22 @@ export default function Register() {
         <InputFile
           label="Adjuntar CURP"
           value={values.curpDocument}
-          onChange={(file) => {
+          onChange={(file: File | null) => {
             setField('curpDocument', file);
             const error = validateFile(file, 'tu CURP');
-            setErrors((prev) => ({ ...prev, curpDocument: error }));
+            setErrors((prev) => {
+              const next = { ...prev };
+              if (error) {
+                next.curpDocument = error;
+              } else {
+                delete next.curpDocument;
+              }
+              return next;
+            });
           }}
           accept={ACCEPTED_TYPES.join(',')}
           required
-          error={errors.curpDocument}
+          {...(errors.curpDocument ? { error: errors.curpDocument } : {})}
           hint="Archivo PDF, JPG o PNG (máx. 2MB)"
           name="curpDocument"
         />

@@ -18,7 +18,9 @@ function renderAt(path = '/catalog') {
 }
 
 describe('CatalogPage', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('sincroniza la URL al cambiar de página', async () => {
     mockFetch({ items: [], page: 1, totalPages: 3 });

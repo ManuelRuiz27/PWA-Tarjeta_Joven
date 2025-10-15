@@ -8,7 +8,9 @@ vi.mock('react-router-dom', async (orig) => {
 });
 
 describe('Register OTP flow', () => {
-  beforeEach(() => vi.restoreAllMocks());
+  beforeEach(() => {
+    vi.restoreAllMocks();
+  });
 
   it('pasa a verificación y acepta OTP pegado', async () => {
     // Mock registro OK, luego verificación OK
