@@ -13,10 +13,16 @@ import OfflineBanner from '@app/components/OfflineBanner';
 import AppRoutes from '@routes';
 import Onboarding from '@features/onboarding/Onboarding';
 import A2HSBanner from '../components/A2HSBanner';
+import { track } from '@lib/analytics';
 
 function App() {
   useEffect(() => {
     initWalletQueueProcessor();
+  }, []);
+  useEffect(() => {
+    const locale = typeof navigator !== 'undefined' ? navigator.language : 'unknown';
+    const version = (import.meta.env.VITE_APP_VERSION as string | undefined) ?? undefined;
+    void track('open_app', { locale, version });
   }, []);
   return (
     <Provider store={store}>

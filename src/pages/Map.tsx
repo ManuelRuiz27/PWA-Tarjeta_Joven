@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import MapCard from '@components/MapCard';
 import ErrorState from '@app/components/ErrorState';
 import type { CatalogItem } from '@features/catalog/types';
 import { useGetCatalogQuery } from '@features/catalog/catalogSlice';
+import { track } from '@lib/analytics';
 
 const DEFAULT_CATEGORY = 'todos';
 const DEFAULT_MUNICIPALITY = 'todos';
@@ -81,6 +82,8 @@ function useMediaQuery(query: string) {
 export default function MapPage() {
   const [params, setParams] = useSearchParams();
   const [selectedItem, setSelectedItem] = useState<CatalogItem | null>(null);
+  const hasTrackedOpen = useRef(false);
+  const previousFilters = useRef<{ category: string; municipality: string } | null>(null);
   const [isOnline, setIsOnline] = useState(() => (typeof navigator !== 'undefined' ? navigator.onLine : true));
   const isWideLayout = useMediaQuery('(min-width: 768px)');
 
@@ -117,6 +120,33 @@ export default function MapPage() {
   });
 
   const items = useMemo(() => data?.items ?? [], [data]);
+
+  useEffect(() => {
+    if (hasTrackedOpen.current) return;
+    hasTrackedOpen.current = true;
+    void track('open_map', {
+      category: currentCategory,
+      municipality: currentMunicipality,
+    });
+  }, [currentCategory, currentMunicipality]);
+
+  useEffect(() => {
+    const nextFilters = { category: currentCategory, municipality: currentMunicipality };
+    if (!previousFilters.current) {
+      previousFilters.current = nextFilters;
+      return;
+    }
+    const prev = previousFilters.current;
+    const changed = prev.category !== nextFilters.category || prev.municipality !== nextFilters.municipality;
+    if (changed) {
+      previousFilters.current = nextFilters;
+      void track('filter', {
+        source: 'map',
+        category: currentCategory,
+        municipality: currentMunicipality,
+      });
+    }
+  }, [currentCategory, currentMunicipality]);
 
   useEffect(() => {
     if (selectedItem && items.some((item) => item.id === selectedItem.id)) {
@@ -174,7 +204,21 @@ export default function MapPage() {
 
   const handleClearFilters = useCallback(() => {
     updateParams({ categoria: null, municipio: null });
+    void track('filter', { source: 'map', action: 'clear' });
   }, [updateParams]);
+
+  const handleSelectItem = useCallback(
+    (item: CatalogItem) => {
+      setSelectedItem(item);
+      void track('open_merchant', {
+        source: 'map',
+        merchantId: item.merchantId ?? item.id,
+        category: item.category,
+        municipality: item.municipality,
+      });
+    },
+    []
+  );
 
   const mapBaseUrl = import.meta.env.VITE_MAPS_URL as string | undefined;
 
@@ -312,7 +356,7 @@ export default function MapPage() {
                 <MapCard
                   key={item.id}
                   item={item}
-                  onSelect={setSelectedItem}
+                  onSelect={handleSelectItem}
                   isActive={selectedItem?.id === item.id}
                 />
               ))}
