@@ -28,6 +28,10 @@ export class AuthController {
         message: { type: 'string' },
         otp: { type: 'string', example: '123456' },
       },
+      example: {
+        message: 'OTP enviado',
+        otp: '123456',
+      },
     },
   })
   sendOtp(@Body() dto: SendOtpDto) {
@@ -44,7 +48,10 @@ export class AuthController {
   @Post('register')
   @ApiOperation({ summary: 'Registrar un nuevo usuario' })
   @ApiConsumes('multipart/form-data')
-  @ApiCreatedResponse({ type: RegisterResponseDto })
+  @ApiCreatedResponse({
+    type: RegisterResponseDto,
+    description: 'Registro recibido correctamente',
+  })
   async register(@Body() dto: RegisterDto): Promise<RegisterResponseDto> {
     return this.authService.register(dto);
   }
@@ -57,6 +64,9 @@ export class AuthController {
       properties: {
         accessToken: { type: 'string' },
       },
+      example: {
+        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
+      },
     },
   })
   refresh(@Body() dto: RefreshTokenDto) {
@@ -66,7 +76,7 @@ export class AuthController {
   @Post('logout')
   @ApiOperation({ summary: 'Cerrar sesión' })
   @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiNoContentResponse()
+  @ApiNoContentResponse({ description: 'Sesión cerrada correctamente' })
   logout() {
     return this.authService.logout();
   }

@@ -1,47 +1,63 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class MerchantDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'mrc_123' })
   id!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Hamburguesas El Buen Sabor' })
   nombre!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'restaurantes' })
   categoria!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Guadalajara' })
   municipio!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: '15% de descuento' })
   descuento!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Av. Principal 123, Col. Centro' })
   direccion!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Lunes a Domingo 9:00 - 22:00' })
   horario!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: 'Promoción válida mostrando tu credencial.' })
   descripcion?: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: 20.6736 })
   lat?: number | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: -103.344 })
   lng?: number | null;
 }
 
 export class CatalogListDto {
-  @ApiProperty({ type: [MerchantDto] })
+  @ApiProperty({
+    type: [MerchantDto],
+    example: [
+      {
+        id: 'mrc_123',
+        nombre: 'Hamburguesas El Buen Sabor',
+        categoria: 'restaurantes',
+        municipio: 'Guadalajara',
+        descuento: '15% de descuento',
+        direccion: 'Av. Principal 123, Col. Centro',
+        horario: 'Lunes a Domingo 9:00 - 22:00',
+        descripcion: 'Promoción válida mostrando tu credencial.',
+        lat: 20.6736,
+        lng: -103.344,
+      },
+    ],
+  })
   data!: MerchantDto[];
 
-  @ApiProperty()
+  @ApiProperty({ example: 25 })
   total!: number;
 
-  @ApiProperty()
+  @ApiProperty({ example: 1 })
   page!: number;
 
-  @ApiProperty()
+  @ApiProperty({ example: 10 })
   pageSize!: number;
 }

@@ -3,11 +3,11 @@ import { Transform } from 'class-transformer';
 import { IsBoolean, IsOptional, IsString, Length } from 'class-validator';
 
 export class RegisterDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'Juan' })
   @IsString()
   nombre!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Pérez López' })
   @IsString()
   apellidos!: string;
 
@@ -20,16 +20,16 @@ export class RegisterDto {
   @Length(10, 18)
   curp!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Colonia Centro' })
   @IsString()
   colonia!: string;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, example: '3312345678' })
   @IsOptional()
   @IsString()
   telefono?: string;
 
-  @ApiProperty({ required: false })
+  @ApiProperty({ required: false, example: 'Guadalajara' })
   @IsOptional()
   @IsString()
   municipio?: string;
@@ -46,7 +46,7 @@ export class RegisterDto {
   @IsOptional()
   curp_file?: any;
 
-  @ApiProperty()
+  @ApiProperty({ example: true })
   @Transform(({ value }) => value === true || value === 'true')
   @IsBoolean()
   acepta_tc!: boolean;
