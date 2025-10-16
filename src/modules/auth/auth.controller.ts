@@ -1,4 +1,4 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
 import {
   ApiCreatedResponse,
   ApiNoContentResponse,
@@ -14,6 +14,9 @@ import { AuthTokensDto } from './dto/auth-tokens.dto';
 import { RegisterDto } from './dto/register.dto';
 import { RegisterResponseDto } from './dto/register-response.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { FastifyRequest } from 'fastify';
+import { OtpThrottleGuard } from '../../common/guards/otp-throttle.guard';
+import { RefreshGuard } from '../../common/guards/refresh.guard';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -21,21 +24,12 @@ export class AuthController {
   constructor(private readonly authService: AuthService) {}
 
   @Post('otp/send')
+  @UseGuards(OtpThrottleGuard)
   @ApiOperation({ summary: 'Enviar OTP al usuario' })
-  @ApiOkResponse({
-    schema: {
-      properties: {
-        message: { type: 'string' },
-        otp: { type: 'string', example: '123456' },
-      },
-      example: {
-        message: 'OTP enviado',
-        otp: '123456',
-      },
-    },
-  })
-  sendOtp(@Body() dto: SendOtpDto) {
-    return this.authService.sendOtp(dto);
+  @HttpCode(HttpStatus.NO_CONTENT)
+  @ApiNoContentResponse({ description: 'OTP enviado correctamente' })
+  async sendOtp(@Body() dto: SendOtpDto): Promise<void> {
+    await this.authService.sendOtp(dto);
   }
 
   @Post('otp/verify')
@@ -57,6 +51,7 @@ export class AuthController {
   }
 
   @Post('refresh')
+  @UseGuards(RefreshGuard)
   @ApiOperation({ summary: 'Refrescar token de acceso' })
   @ApiOkResponse({
     schema: {
@@ -69,8 +64,9 @@ export class AuthController {
       },
     },
   })
-  refresh(@Body() dto: RefreshTokenDto) {
-    return this.authService.refreshToken(dto);
+  refresh(@Req() request: FastifyRequest, @Body() _dto: RefreshTokenDto) {
+    const payload = (request as any).user as { sub: string; curp: string };
+    return this.authService.refreshToken(payload);
   }
 
   @Post('logout')

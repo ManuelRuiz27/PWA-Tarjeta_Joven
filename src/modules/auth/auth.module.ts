@@ -4,6 +4,9 @@ import { JwtModule } from '@nestjs/jwt';
 import { AuthController } from './auth.controller';
 import { AuthService } from './auth.service';
 import { UsersModule } from '../users/users.module';
+import { OtpSenderService } from './providers/otp-sender.service';
+import { OtpThrottleGuard } from '../../common/guards/otp-throttle.guard';
+import { RefreshGuard } from '../../common/guards/refresh.guard';
 
 @Module({
   imports: [
@@ -21,7 +24,7 @@ import { UsersModule } from '../users/users.module';
     }),
   ],
   controllers: [AuthController],
-  providers: [AuthService],
+  providers: [AuthService, OtpSenderService, OtpThrottleGuard, RefreshGuard],
   exports: [AuthService],
 })
 export class AuthModule {}
