@@ -59,6 +59,9 @@ CREATE TABLE "PushSubscription" (
 CREATE UNIQUE INDEX "User_curp_key" ON "User"("curp");
 
 -- CreateIndex
+CREATE INDEX "OtpRequest_curp_idx" ON "OtpRequest"("curp");
+
+-- CreateIndex
 CREATE UNIQUE INDEX "PushSubscription_endpoint_key" ON "PushSubscription"("endpoint");
 
 -- AddForeignKey
