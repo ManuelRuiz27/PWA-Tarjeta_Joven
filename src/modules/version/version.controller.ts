@@ -7,7 +7,7 @@ class VersionResponseDto {
   @ApiProperty({ example: '0.1.0' })
   version!: string;
 
-  @ApiProperty({ example: 'unknown' })
+  @ApiProperty({ example: 'abcdef0' })
   commit!: string;
 }
 
