@@ -1,6 +1,8 @@
 import {
   BadRequestException,
+  ConflictException,
   ForbiddenException,
+  Inject,
   Injectable,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
@@ -14,6 +16,11 @@ import { AuthTokensDto } from './dto/auth-tokens.dto';
 import * as bcrypt from 'bcryptjs';
 import { OtpSenderService } from './providers/otp-sender.service';
 import { User } from '@prisma/client';
+import {
+  STORAGE_PROVIDER,
+  StorageProvider,
+  IncomingFile,
+} from '../../common/storage/storage.types';
 
 @Injectable()
 export class AuthService {
@@ -21,6 +28,12 @@ export class AuthService {
   private readonly otpMaxResends: number;
   private readonly otpMaxAttempts: number;
   private readonly otpCooldownSeconds: number;
+  private readonly maxFileSizeBytes = 2 * 1024 * 1024;
+  private readonly mimeToExtension: Record<string, string> = {
+    'image/jpeg': '.jpg',
+    'image/png': '.png',
+    'application/pdf': '.pdf',
+  };
 
   constructor(
     private readonly prisma: PrismaService,
@@ -28,6 +41,8 @@ export class AuthService {
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
     private readonly otpSenderService: OtpSenderService,
+    @Inject(STORAGE_PROVIDER)
+    private readonly storageProvider: StorageProvider,
   ) {
     this.otpTtlSeconds = Number(
       this.configService.get<string>('OTP_TTL_SECONDS') ?? '300',
@@ -172,16 +187,28 @@ export class AuthService {
       });
     }
 
+    const ineFile = await this.prepareIncomingFile('ine', data.ine);
+    const curpFile = await this.prepareIncomingFile('curp', data.curpFile);
+    const comprobanteFile = await this.prepareIncomingFile('comprobante', data.comprobante);
+
     const existing = await this.usersService.findByCurp(normalizedCurp);
+
+    if (existing && existing.isActive) {
+      throw new ConflictException({
+        code: 'USER_ALREADY_REGISTERED',
+        message: 'Ya existe un usuario registrado con esta CURP',
+      });
+    }
+
     const payload = {
       nombre: data.nombre,
       apellidos: data.apellidos,
       fechaNacimiento: birthDate,
       colonia: data.colonia,
       curp: normalizedCurp,
-      municipio: data.municipio,
-      telefono: data.telefono,
-      isActive: false,
+      municipio: data.municipio ?? null,
+      telefono: data.telefono ?? null,
+      isActive: true,
     };
 
     const user = existing
@@ -190,6 +217,12 @@ export class AuthService {
           data: payload,
         })
       : await this.prisma.user.create({ data: payload });
+
+    await Promise.all([
+      this.storageProvider.saveUserDocument(user.id, 'ine', ineFile),
+      this.storageProvider.saveUserDocument(user.id, 'curp', curpFile),
+      this.storageProvider.saveUserDocument(user.id, 'comprobante', comprobanteFile),
+    ]);
 
     return { userId: user.id };
   }
@@ -239,13 +272,109 @@ export class AuthService {
       return null;
     }
     const date = new Date(year, month - 1, day);
-    if (Number.isNaN(date.getTime())) {
+    if (
+      Number.isNaN(date.getTime()) ||
+      date.getFullYear() !== year ||
+      date.getMonth() + 1 !== month ||
+      date.getDate() !== day
+    ) {
       return null;
     }
     return date;
+  }
+
+  private async prepareIncomingFile(
+    fieldName: 'ine' | 'curp' | 'comprobante',
+    raw: unknown,
+  ): Promise<IncomingFile> {
+    const file = this.pickMultipartFile(raw);
+    if (!file) {
+      throw new BadRequestException({
+        code: 'FILE_REQUIRED',
+        message: `El archivo ${fieldName} es obligatorio`,
+      });
+    }
+
+    const mimetype = (file.mimetype ?? '').toLowerCase();
+    const extension = this.mimeToExtension[mimetype];
+    if (!extension) {
+      throw new BadRequestException({
+        code: 'FILE_TYPE_NOT_ALLOWED',
+        message: `El archivo ${fieldName} debe ser JPG, PNG o PDF`,
+      });
+    }
+
+    const buffer = await this.consumeFileBuffer(file);
+    if (buffer.length === 0) {
+      throw new BadRequestException({
+        code: 'FILE_EMPTY',
+        message: `El archivo ${fieldName} no puede estar vacío`,
+      });
+    }
+
+    if (buffer.length > this.maxFileSizeBytes) {
+      throw new BadRequestException({
+        code: 'FILE_TOO_LARGE',
+        message: `El archivo ${fieldName} supera el tamaño máximo de 2 MB`,
+      });
+    }
+
+    return {
+      fieldName,
+      originalName: `${fieldName}${extension}`,
+      mimetype,
+      buffer,
+    };
+  }
+
+  private pickMultipartFile(value: unknown): MultipartFileLike | null {
+    if (!value) {
+      return null;
+    }
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        const result = this.pickMultipartFile(item);
+        if (result) {
+          return result;
+        }
+      }
+      return null;
+    }
+    if (typeof value === 'object') {
+      const candidate = value as MultipartFileLike;
+      if (candidate.type === 'file' || candidate.file || candidate.mimetype) {
+        return candidate;
+      }
+    }
+    return null;
+  }
+
+  private async consumeFileBuffer(file: MultipartFileLike): Promise<Buffer> {
+    if (typeof file.toBuffer === 'function') {
+      return file.toBuffer();
+    }
+    if (!file.file) {
+      return Buffer.alloc(0);
+    }
+    const chunks: Buffer[] = [];
+    for await (const chunk of file.file) {
+      chunks.push(Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk));
+    }
+    return Buffer.concat(chunks);
   }
 
   private generateOtp() {
     return Math.floor(100000 + Math.random() * 900000).toString();
   }
 }
+
+type MultipartFileLike = {
+  type?: string;
+  fieldname?: string;
+  filename?: string;
+  mimetype?: string;
+  encoding?: string;
+  toBuffer?: () => Promise<Buffer>;
+  file?: AsyncIterable<unknown> & NodeJS.ReadableStream;
+  value?: unknown;
+};
