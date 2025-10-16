@@ -1,21 +1,21 @@
 import { ApiProperty } from '@nestjs/swagger';
 
 export class UserResponseDto {
-  @ApiProperty()
+  @ApiProperty({ example: 'usr_123' })
   id!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Juan' })
   nombre!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'Pérez López' })
   apellidos!: string;
 
-  @ApiProperty()
+  @ApiProperty({ example: 'PEPJ800101HDFLLL01' })
   curp!: string;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: 'Guadalajara' })
   municipio?: string | null;
 
-  @ApiProperty({ nullable: true })
+  @ApiProperty({ nullable: true, example: '3312345678' })
   telefono?: string | null;
 }

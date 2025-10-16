@@ -3,17 +3,17 @@ import { Transform } from 'class-transformer';
 import { IsInt, IsOptional, IsString, Min } from 'class-validator';
 
 export class CatalogQueryDto {
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'restaurantes' })
   @IsOptional()
   @IsString()
   categoria?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'Guadalajara' })
   @IsOptional()
   @IsString()
   municipio?: string;
 
-  @ApiPropertyOptional()
+  @ApiPropertyOptional({ example: 'hamburguesa' })
   @IsOptional()
   @IsString()
   q?: string;

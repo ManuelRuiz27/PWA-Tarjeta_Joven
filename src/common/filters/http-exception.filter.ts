@@ -20,15 +20,28 @@ export class HttpErrorFilter implements ExceptionFilter {
     if (exception instanceof HttpException) {
       status = exception.getStatus();
       const responseBody = exception.getResponse();
-      const responseMessage =
+      const responseObject =
         typeof responseBody === 'string'
-          ? responseBody
-          : (responseBody as any).message ?? exception.message;
-      message = Array.isArray(responseMessage)
-        ? responseMessage.join(', ')
-        : responseMessage;
-      code = (responseBody as any)?.code ?? exception.name;
-      details = (responseBody as any)?.details;
+          ? { message: responseBody }
+          : (responseBody as Record<string, unknown>);
+      const responseMessage =
+        responseObject?.message ?? exception.message ?? 'Error';
+
+      const isArrayMessage = Array.isArray(responseMessage);
+      message = isArrayMessage
+        ? (responseMessage as string[]).join(', ')
+        : String(responseMessage);
+
+      code =
+        (responseObject?.code as string | undefined) ??
+        (isArrayMessage ? 'VALIDATION_ERROR' : exception.name);
+
+      const responseDetails = responseObject?.details;
+      if (responseDetails) {
+        details = responseDetails;
+      } else if (isArrayMessage) {
+        details = responseMessage;
+      }
     } else if (exception instanceof Error) {
       message = exception.message;
     }

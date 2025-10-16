@@ -3,6 +3,7 @@ import { ApiBearerAuth, ApiCreatedResponse, ApiNoContentResponse, ApiOperation, 
 import { CurrentUser, AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
 import { CreatePushSubscriptionDto } from './dto/create-subscription.dto';
+import { PushSubscriptionResponseDto } from './dto/push-subscription-response.dto';
 import { PushService } from './push.service';
 
 @ApiTags('Push')
@@ -15,17 +16,8 @@ export class PushController {
   @Post()
   @ApiOperation({ summary: 'Registrar suscripción push' })
   @ApiCreatedResponse({
-    schema: {
-      type: 'object',
-      properties: {
-        id: { type: 'string' },
-        endpoint: { type: 'string' },
-        p256dh: { type: 'string' },
-        auth: { type: 'string' },
-        userId: { type: 'string' },
-        createdAt: { type: 'string', format: 'date-time' },
-      },
-    },
+    type: PushSubscriptionResponseDto,
+    description: 'Suscripción creada correctamente',
   })
   create(
     @CurrentUser() user: AuthenticatedUser,
@@ -36,7 +28,7 @@ export class PushController {
 
   @Delete(':id')
   @ApiOperation({ summary: 'Eliminar suscripción push' })
-  @ApiNoContentResponse()
+  @ApiNoContentResponse({ description: 'Suscripción eliminada correctamente' })
   @HttpCode(HttpStatus.NO_CONTENT)
   async remove(
     @CurrentUser() user: AuthenticatedUser,
