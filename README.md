@@ -1,33 +1,64 @@
 # Tarjeta Joven API
 
-Backend construido con [NestJS](https://nestjs.com/) + [Fastify](https://fastify.dev/), [Prisma](https://www.prisma.io/) y PostgreSQL para la Tarjeta Joven.
+Backend para la Tarjeta Joven construido con [NestJS](https://nestjs.com/) + [Fastify](https://fastify.dev/), [Prisma](https://www.prisma.io/) y PostgreSQL. Expone un API REST para autenticación por OTP, administración de usuarios y catálogo de comercios, además de endpoints para registro de notificaciones push.
 
-## Requisitos previos
+## Requisitos
 
-* Docker y Docker Compose
-* Node.js 20 (para desarrollo local sin contenedores)
+* Docker 24+ y Docker Compose v2
+* Node.js 20 (usa `.nvmrc` para alinearte en desarrollo local)
+* npm 10+
 
-## Variables de entorno
+## Configuración de variables de entorno
 
-Copia `.env.example` a `.env` y ajusta los valores según tu entorno. Incluye credenciales de base de datos, secretos JWT y parámetros de OTP (TTL, máximo de reenvíos y cooldown).
+Copia el archivo `.env.example` y ajusta los valores según tu entorno antes de iniciar los servicios:
 
 ```bash
 cp .env.example .env
 ```
 
+Las variables principales son:
+
+| Variable | Descripción | Valor por defecto sugerido |
+| --- | --- | --- |
+| `NODE_ENV` | Entorno de ejecución. | `development` |
+| `PORT` | Puerto expuesto por la API. | `8080` |
+| `LOG_LEVEL` | Nivel mínimo de logs (`fatal`, `error`, `warn`, `log`, `debug`, `verbose`). | `debug` |
+| `DATABASE_URL` | Cadena de conexión utilizada por Prisma. | `postgresql://tjuser:tjpass@db:5432/tjdb?schema=public` |
+| `JWT_ACCESS_SECRET` / `JWT_REFRESH_SECRET` | Secretos usados para firmar tokens JWT. | Cambia ambos por valores robustos |
+| `JWT_ACCESS_TTL` / `JWT_REFRESH_TTL` | Tiempo de vida de los tokens. | `900s` / `7d` |
+| `OTP_*` | Configuración de OTP (TTL, reintentos y cooldown). | Valores de ejemplo en `.env.example` |
+| `RATE_LIMIT_*` | Límites globales y específicos de OTP. | Valores de ejemplo en `.env.example` |
+| `CORS_ORIGIN` / `CORS_CREDENTIALS` | Orígenes permitidos para CORS. | `http://localhost:4200` / `true` |
+| `STORAGE_DRIVER` | Driver de almacenamiento de archivos. Actualmente solo `local`. | `local` |
+| `SENTRY_DSN` | DSN de Sentry para reportar errores. Déjalo vacío para desactivar. | — |
+
 ## Ejecutar con Docker
 
-Compila e inicia los servicios con Docker Compose:
+Compila la imagen y levanta los servicios (base de datos y API) en segundo plano:
 
 ```bash
 docker compose up -d --build
 ```
 
-Esto levantará una base de datos PostgreSQL y el backend en `http://localhost:8080`.
+* La API quedará disponible en `http://localhost:8080`.
+* Las migraciones se aplican automáticamente en el arranque (`npx prisma migrate deploy`).
+* El volumen `./uploads` se comparte con el contenedor para persistir archivos de usuarios.
+
+Para revisar los logs del backend:
+
+```bash
+docker compose logs -f backend
+```
+
+Detén y elimina los contenedores cuando termines:
+
+```bash
+docker compose down
+```
 
 ## Migraciones y seed
 
-Si trabajas de forma local (sin Docker) instala dependencias y ejecuta:
+Si trabajas sin contenedores, instala dependencias, ejecuta migraciones y corre el seed:
 
 ```bash
 npm install
@@ -35,7 +66,7 @@ npx prisma migrate dev
 npm run db:seed
 ```
 
-Con Docker Compose las migraciones se aplican automáticamente al iniciar el contenedor (`npx prisma migrate deploy`). Para ejecutar el seed manualmente dentro del contenedor:
+Dentro del contenedor puedes ejecutar el seed manualmente:
 
 ```bash
 docker compose exec backend npm run db:seed
@@ -43,7 +74,7 @@ docker compose exec backend npm run db:seed
 
 ## Documentación Swagger
 
-La documentación interactiva está disponible en `http://localhost:8080/docs`. El documento JSON puede obtenerse desde `http://localhost:8080/docs-json`.
+La documentación interactiva está disponible en `http://localhost:8080/docs`. El documento JSON puede obtenerse en `http://localhost:8080/docs-json`.
 
 ## Endpoints principales
 
@@ -63,6 +94,8 @@ Todos los endpoints están prefijados con `/api/v1`.
 * `DELETE /api/v1/push/subscriptions/:id` – Eliminar suscripción push.
 
 ## Desarrollo local
+
+Para ejecutar la API en modo desarrollo con recarga automática:
 
 ```bash
 npm install
