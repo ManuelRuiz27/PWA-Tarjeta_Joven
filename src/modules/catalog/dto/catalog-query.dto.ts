@@ -1,6 +1,6 @@
 import { ApiPropertyOptional } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
-import { IsInt, IsOptional, IsString, Min } from 'class-validator';
+import { IsInt, IsOptional, IsString, Max, Min } from 'class-validator';
 
 export class CatalogQueryDto {
   @ApiPropertyOptional({ example: 'restaurantes' })
@@ -25,10 +25,17 @@ export class CatalogQueryDto {
   @Min(1)
   page: number = 1;
 
-  @ApiPropertyOptional({ default: 10 })
+  @ApiPropertyOptional({ default: 20, maximum: 50 })
   @IsOptional()
-  @Transform(({ value }) => Number(value))
+  @Transform(({ value }) => {
+    const parsed = Number(value);
+    if (Number.isNaN(parsed)) {
+      return 20;
+    }
+    return Math.min(parsed, 50);
+  })
   @IsInt()
   @Min(1)
-  pageSize: number = 10;
+  @Max(50)
+  pageSize: number = 20;
 }
