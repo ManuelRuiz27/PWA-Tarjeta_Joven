@@ -7,10 +7,12 @@ import { UsersModule } from '../users/users.module';
 import { OtpSenderService } from './providers/otp-sender.service';
 import { OtpThrottleGuard } from '../../common/guards/otp-throttle.guard';
 import { RefreshGuard } from '../../common/guards/refresh.guard';
+import { StorageModule } from '../../common/storage/storage.module';
 
 @Module({
   imports: [
     ConfigModule,
+    StorageModule,
     UsersModule,
     JwtModule.registerAsync({
       imports: [ConfigModule],

@@ -7,6 +7,8 @@ import { AuthModule } from './auth.module';
 import { PrismaService } from '../../common/services/prisma.service';
 import { OtpSenderService } from './providers/otp-sender.service';
 import { User } from '@prisma/client';
+import { promises as fs } from 'fs';
+import * as path from 'path';
 
 type OtpRequestEntity = {
   id: string;
@@ -19,6 +21,8 @@ type OtpRequestEntity = {
 };
 
 type UserEntity = User;
+
+const uploadsRoot = path.resolve(process.cwd(), 'uploads', 'users');
 
 class PrismaServiceMock {
   otpRequests: OtpRequestEntity[] = [];
@@ -166,6 +170,7 @@ describe('Auth flow (e2e)', () => {
     process.env.OTP_COOLDOWN_SECONDS = '30';
     process.env.OTP_THROTTLE_LIMIT = '100';
     process.env.OTP_THROTTLE_WINDOW_SECONDS = '60';
+    process.env.STORAGE_DRIVER = 'local';
 
     prisma = new PrismaServiceMock();
 
@@ -189,15 +194,17 @@ describe('Auth flow (e2e)', () => {
     );
     await app.init();
     await app.getHttpAdapter().getInstance().ready();
+    await fs.rm(uploadsRoot, { recursive: true, force: true });
   });
 
   afterAll(async () => {
     await app.close();
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     prisma.reset();
     otpSender.lastOtp = null;
+    await fs.rm(uploadsRoot, { recursive: true, force: true });
   });
 
   const server = () => app.getHttpServer();
@@ -262,5 +269,123 @@ describe('Auth flow (e2e)', () => {
       .expect(({ body }) => {
         expect(body.code).toBe('OTP_COOLDOWN');
       });
+  });
+
+  describe('registro de usuarios', () => {
+    const buildRequest = (overrides: Record<string, string> = {}) => {
+      const payload: Record<string, string> = {
+        nombre: 'Juan',
+        apellidos: 'Pérez',
+        fechaNacimiento: '01/02/2000',
+        curp: overrides.curp ?? 'AAAA000101HDFLNS12',
+        colonia: 'Centro',
+        acepta_tc: overrides.acepta_tc ?? 'true',
+      };
+
+      if (overrides.telefono) {
+        payload.telefono = overrides.telefono;
+      }
+      if (overrides.municipio) {
+        payload.municipio = overrides.municipio;
+      }
+
+      let req = request(server()).post('/auth/register');
+      for (const [key, value] of Object.entries(payload)) {
+        req = req.field(key, value);
+      }
+      return req;
+    };
+
+    const attachDefaultFiles = (req: request.SuperTest<request.Test>) =>
+      req
+        .attach('ine', Buffer.from('fake-ine'), {
+          filename: 'ine.png',
+          contentType: 'image/png',
+        })
+        .attach('curp', Buffer.from('fake-curp'), {
+          filename: 'curp.pdf',
+          contentType: 'application/pdf',
+        })
+        .attach('comprobante', Buffer.from('fake-comprobante'), {
+          filename: 'comprobante.jpg',
+          contentType: 'image/jpeg',
+        });
+
+    it('registra al usuario y persiste los archivos', async () => {
+      const response = await attachDefaultFiles(buildRequest()).expect(201);
+
+      expect(response.body.userId).toBeDefined();
+      const userId = response.body.userId as string;
+
+      const storedUser = prisma.users.find(
+        (user) => user.curp === 'AAAA000101HDFLNS12',
+      );
+      expect(storedUser).toMatchObject({
+        nombre: 'Juan',
+        apellidos: 'Pérez',
+        colonia: 'Centro',
+        isActive: true,
+      });
+
+      const userDir = path.join(uploadsRoot, userId);
+      const files = await fs.readdir(userDir);
+      expect(files.some((name) => name.startsWith('ine-'))).toBe(true);
+      expect(files.some((name) => name.startsWith('curp-'))).toBe(true);
+      expect(files.some((name) => name.startsWith('comprobante-'))).toBe(true);
+    });
+
+    it('rechaza archivos mayores a 2MB', async () => {
+      const largeBuffer = Buffer.alloc(2 * 1024 * 1024 + 1, 1);
+
+      await buildRequest()
+        .attach('ine', largeBuffer, {
+          filename: 'ine.png',
+          contentType: 'image/png',
+        })
+        .attach('curp', Buffer.from('fake-curp'), {
+          filename: 'curp.pdf',
+          contentType: 'application/pdf',
+        })
+        .attach('comprobante', Buffer.from('fake-comprobante'), {
+          filename: 'comprobante.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(400)
+        .expect(({ body }) => {
+          expect(body.code).toBe('FILE_TOO_LARGE');
+        });
+
+      expect(prisma.users).toHaveLength(0);
+    });
+
+    it('rechaza formatos de archivo no permitidos', async () => {
+      await buildRequest({ curp: 'AEEX000101HDFLNS13' })
+        .attach('ine', Buffer.from('contenido'), {
+          filename: 'ine.txt',
+          contentType: 'text/plain',
+        })
+        .attach('curp', Buffer.from('fake-curp'), {
+          filename: 'curp.pdf',
+          contentType: 'application/pdf',
+        })
+        .attach('comprobante', Buffer.from('fake-comprobante'), {
+          filename: 'comprobante.jpg',
+          contentType: 'image/jpeg',
+        })
+        .expect(400)
+        .expect(({ body }) => {
+          expect(body.code).toBe('FILE_TYPE_NOT_ALLOWED');
+        });
+    });
+
+    it('impide registrar una CURP duplicada', async () => {
+      await attachDefaultFiles(buildRequest()).expect(201);
+
+      await attachDefaultFiles(buildRequest())
+        .expect(409)
+        .expect(({ body }) => {
+          expect(body.code).toBe('USER_ALREADY_REGISTERED');
+        });
+    });
   });
 });
