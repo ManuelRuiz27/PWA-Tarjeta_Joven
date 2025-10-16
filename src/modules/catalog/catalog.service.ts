@@ -74,13 +74,31 @@ export class CatalogService {
   }
 
   async findOne(id: string) {
-    const merchant = await this.prisma.merchant.findUnique({ where: { id } });
-    if (!merchant) {
+    const merchant = await this.prisma.merchant.findUnique({
+      where: { id },
+      select: {
+        id: true,
+        nombre: true,
+        categoria: true,
+        municipio: true,
+        descuento: true,
+        direccion: true,
+        horario: true,
+        descripcion: true,
+        lat: true,
+        lng: true,
+        activo: true,
+      },
+    });
+    if (!merchant || !merchant.activo) {
       throw new NotFoundException({
+        statusCode: 404,
         code: 'MERCHANT_NOT_FOUND',
         message: 'Comercio no encontrado',
+        error: 'Not Found',
       });
     }
-    return merchant;
+    const { activo, ...merchantData } = merchant;
+    return merchantData;
   }
 }
