@@ -47,14 +47,29 @@ export class CatalogService {
         orderBy: { nombre: 'asc' },
         skip: (query.page - 1) * query.pageSize,
         take: query.pageSize,
+        select: {
+          id: true,
+          nombre: true,
+          categoria: true,
+          municipio: true,
+          descuento: true,
+          direccion: true,
+          horario: true,
+          descripcion: true,
+          lat: true,
+          lng: true,
+        },
       }),
     ]);
 
+    const totalPages = total === 0 ? 0 : Math.ceil(total / query.pageSize);
+
     return {
-      data: items,
+      items,
       total,
       page: query.page,
       pageSize: query.pageSize,
+      totalPages,
     };
   }
 

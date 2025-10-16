@@ -50,7 +50,7 @@ export class CatalogListDto {
       },
     ],
   })
-  data!: MerchantDto[];
+  items!: MerchantDto[];
 
   @ApiProperty({ example: 25 })
   total!: number;
@@ -58,6 +58,9 @@ export class CatalogListDto {
   @ApiProperty({ example: 1 })
   page!: number;
 
-  @ApiProperty({ example: 10 })
+  @ApiProperty({ example: 20 })
   pageSize!: number;
+
+  @ApiProperty({ example: 2 })
+  totalPages!: number;
 }
