@@ -230,13 +230,19 @@ const users = [
 ];
 
 async function seed() {
+  await prisma.$transaction([
+    prisma.pushSubscription.deleteMany(),
+    prisma.otpRequest.deleteMany(),
+    prisma.merchant.deleteMany(),
+    prisma.user.deleteMany(),
+  ]);
+
   await prisma.merchant.createMany({ data: merchants });
   await prisma.user.createMany({
     data: users.map((user) => ({
       ...user,
       isActive: true,
     })),
-    skipDuplicates: true,
   });
 }
 

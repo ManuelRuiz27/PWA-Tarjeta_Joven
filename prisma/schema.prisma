@@ -19,7 +19,6 @@ model User {
   isActive        Boolean           @default(true)
   createdAt       DateTime          @default(now())
   updatedAt       DateTime          @updatedAt
-  otpRequests     OtpRequest[]
   pushSubscriptions PushSubscription[]
 }
 
@@ -31,6 +30,8 @@ model OtpRequest {
   attempts  Int      @default(0)
   resends   Int      @default(0)
   createdAt DateTime @default(now())
+
+  @@index([curp])
 }
 
 model Merchant {
