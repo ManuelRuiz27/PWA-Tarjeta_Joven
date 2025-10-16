@@ -1,4 +1,9 @@
-import { HttpStatus, RequestMethod, ValidationPipe } from '@nestjs/common';
+import {
+  HttpStatus,
+  LoggerService,
+  RequestMethod,
+  ValidationPipe,
+} from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
 import fastifyCors from '@fastify/cors';
@@ -8,6 +13,11 @@ import rateLimit from '@fastify/rate-limit';
 import { FastifyReply, FastifyRequest } from 'fastify';
 import { AppConfig } from '../../config/app.config';
 import { HttpErrorFilter } from '../filters/http-exception.filter';
+
+export interface ConfigureAppOptions {
+  logger?: LoggerService;
+  captureException?: (exception: unknown, context?: Record<string, unknown>) => void;
+}
 
 const normalizeHeaderValue = (value: string | string[] | undefined): string | undefined => {
   if (Array.isArray(value)) {
@@ -72,6 +82,7 @@ const enforceMultipartTotalLimit = (
 
 export const configureApp = async (
   app: NestFastifyApplication,
+  options: ConfigureAppOptions = {},
 ): Promise<AppConfig> => {
   const configService = app.get(ConfigService);
   const appConfig = configService.getOrThrow<AppConfig>('app');
@@ -165,7 +176,11 @@ export const configureApp = async (
   });
 
   app.useGlobalFilters(
-    new HttpErrorFilter({ exposeErrorDetails: !isProduction }),
+    new HttpErrorFilter({
+      exposeErrorDetails: !isProduction,
+      logger: options.logger,
+      captureException: options.captureException,
+    }),
   );
 
   app.useGlobalPipes(

@@ -4,10 +4,14 @@ import {
   ExceptionFilter,
   HttpException,
   HttpStatus,
+  LoggerService,
 } from '@nestjs/common';
+import { FastifyRequest } from 'fastify';
 
 interface HttpErrorFilterOptions {
   exposeErrorDetails: boolean;
+  logger?: LoggerService;
+  captureException?: (exception: unknown, context?: Record<string, unknown>) => void;
 }
 
 @Catch()
@@ -19,6 +23,7 @@ export class HttpErrorFilter implements ExceptionFilter {
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse();
+    const request = ctx.getRequest<FastifyRequest>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
@@ -66,11 +71,35 @@ export class HttpErrorFilter implements ExceptionFilter {
       }
     }
 
-    response.status(status).send({
+    const responseBody = {
       statusCode: status,
       code,
       message,
       ...(details ? { details } : {}),
-    });
+    };
+
+    const logPayload = {
+      ...responseBody,
+      path: request?.url,
+      method: request?.method,
+    };
+
+    if (status >= HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException)) {
+      this.options.logger?.error(
+        logPayload,
+        exception instanceof Error ? exception.stack : undefined,
+        HttpErrorFilter.name,
+      );
+    } else {
+      this.options.logger?.warn(logPayload, HttpErrorFilter.name);
+    }
+
+    if (this.options.captureException && (status >= HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException))) {
+      this.options.captureException(exception, {
+        ...logPayload,
+      });
+    }
+
+    response.status(status).send(responseBody);
   }
 }
