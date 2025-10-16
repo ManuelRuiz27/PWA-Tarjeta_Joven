@@ -46,8 +46,27 @@ class PrismaServiceMock {
       const end = typeof take === 'number' ? start + take : undefined;
       return sorted.slice(start, end).map(({ activo, ...item }) => ({ ...item }));
     },
-    findUnique: async ({ where }: { where: { id: string } }) => {
-      return this.merchants.find((merchant) => merchant.id === where.id) ?? null;
+    findUnique: async ({
+      where,
+      select,
+    }: {
+      where: { id: string };
+      select?: Partial<Record<keyof MerchantEntity, boolean>>;
+    }) => {
+      const merchant =
+        this.merchants.find((candidate) => candidate.id === where.id) ?? null;
+      if (!merchant) {
+        return null;
+      }
+      if (!select) {
+        return { ...merchant };
+      }
+      return Object.entries(select).reduce((acc, [key, isSelected]) => {
+        if (isSelected) {
+          acc[key as keyof MerchantEntity] = merchant[key as keyof MerchantEntity];
+        }
+        return acc;
+      }, {} as Partial<MerchantEntity>);
     },
   };
 
@@ -323,5 +342,35 @@ describe('CatalogController (e2e)', () => {
     expect(response.body.items).toHaveLength(50);
     expect(response.body.total).toBe(60);
     expect(response.body.totalPages).toBe(2);
+  });
+
+  it('should return merchant details', async () => {
+    const response = await request(app.getHttpServer()).get('/catalog/mrc_1');
+
+    expect(response.status).toBe(200);
+    expect(response.body).toEqual({
+      id: 'mrc_1',
+      nombre: 'Arte Local',
+      categoria: 'artesania',
+      municipio: 'Guadalajara',
+      descuento: '10% de descuento',
+      direccion: 'Calle Falsa 123',
+      horario: 'Lunes a Viernes 09:00 - 18:00',
+      descripcion: 'Artesanías y regalos únicos',
+      lat: null,
+      lng: null,
+    });
+  });
+
+  it('should return 404 when merchant is not available', async () => {
+    const response = await request(app.getHttpServer()).get('/catalog/mrc_5');
+
+    expect(response.status).toBe(404);
+    expect(response.body).toEqual({
+      statusCode: 404,
+      code: 'MERCHANT_NOT_FOUND',
+      message: 'Comercio no encontrado',
+      error: 'Not Found',
+    });
   });
 });
