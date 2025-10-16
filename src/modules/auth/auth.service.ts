@@ -2,7 +2,6 @@ import {
   BadRequestException,
   ForbiddenException,
   Injectable,
-  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -11,9 +10,10 @@ import { UsersService } from '../users/users.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RegisterDto } from './dto/register.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
 import * as bcrypt from 'bcryptjs';
+import { OtpSenderService } from './providers/otp-sender.service';
+import { User } from '@prisma/client';
 
 @Injectable()
 export class AuthService {
@@ -27,6 +27,7 @@ export class AuthService {
     private readonly usersService: UsersService,
     private readonly jwtService: JwtService,
     private readonly configService: ConfigService,
+    private readonly otpSenderService: OtpSenderService,
   ) {
     this.otpTtlSeconds = Number(
       this.configService.get<string>('OTP_TTL_SECONDS') ?? '300',
@@ -42,7 +43,7 @@ export class AuthService {
     );
   }
 
-  async sendOtp({ curp }: SendOtpDto) {
+  async sendOtp({ curp }: SendOtpDto): Promise<void> {
     const normalizedCurp = curp.toUpperCase();
     const existing = await this.prisma.otpRequest.findFirst({
       where: { curp: normalizedCurp },
@@ -59,8 +60,7 @@ export class AuthService {
           details: { secondsRemaining: Math.ceil(this.otpCooldownSeconds - secondsSinceLast) },
         });
       }
-      const remainingResends = this.otpMaxResends - existing.resends;
-      if (remainingResends <= 0) {
+      if (existing.resends >= this.otpMaxResends) {
         throw new ForbiddenException({
           code: 'OTP_MAX_RESENDS',
           message: 'Se alcanzó el máximo de envíos permitidos',
@@ -80,6 +80,7 @@ export class AuthService {
           expiresAt,
           resends: existing.resends + 1,
           attempts: 0,
+          createdAt: new Date(),
         },
       });
     } else {
@@ -93,10 +94,7 @@ export class AuthService {
       });
     }
 
-    return {
-      message: 'OTP enviado',
-      otp,
-    };
+    await this.otpSenderService.sendOtp(normalizedCurp, otp);
   }
 
   async verifyOtp({ curp, otp }: VerifyOtpDto): Promise<AuthTokensDto> {
@@ -114,6 +112,7 @@ export class AuthService {
     }
 
     if (request.expiresAt.getTime() < Date.now()) {
+      await this.prisma.otpRequest.delete({ where: { id: request.id } });
       throw new BadRequestException({
         code: 'OTP_EXPIRED',
         message: 'El código OTP ha expirado',
@@ -141,12 +140,17 @@ export class AuthService {
 
     await this.prisma.otpRequest.delete({ where: { id: request.id } });
 
-    const user = await this.usersService.findByCurp(normalizedCurp);
-    const tokens = await this.createTokens(user?.id ?? normalizedCurp, normalizedCurp);
+    let user = await this.usersService.findByCurp(normalizedCurp);
+
+    if (!user) {
+      user = await this.createPlaceholderUser(normalizedCurp);
+    }
+
+    const tokens = await this.createTokens(user.id, normalizedCurp);
 
     return {
       ...tokens,
-      user: user ? this.usersService.mapToResponse(user) : null,
+      user: this.usersService.mapToResponse(user),
     };
   }
 
@@ -190,25 +194,15 @@ export class AuthService {
     return { userId: user.id };
   }
 
-  async refreshToken({ refreshToken }: RefreshTokenDto) {
-    try {
-      const payload = await this.jwtService.verifyAsync(refreshToken, {
-        secret: this.configService.getOrThrow('JWT_REFRESH_SECRET'),
-      });
-      const accessToken = await this.jwtService.signAsync(
-        { sub: payload.sub, curp: payload.curp },
-        {
-          secret: this.configService.getOrThrow('JWT_ACCESS_SECRET'),
-          expiresIn: this.configService.get<string>('JWT_ACCESS_TTL') ?? '900s',
-        },
-      );
-      return { accessToken };
-    } catch (error) {
-      throw new UnauthorizedException({
-        code: 'INVALID_REFRESH_TOKEN',
-        message: 'El token de refresco es inválido o ha expirado',
-      });
-    }
+  async refreshToken(payload: { sub: string; curp: string }) {
+    const accessToken = await this.jwtService.signAsync(
+      { sub: payload.sub, curp: payload.curp },
+      {
+        secret: this.configService.getOrThrow('JWT_ACCESS_SECRET'),
+        expiresIn: this.configService.get<string>('JWT_ACCESS_TTL') ?? '900s',
+      },
+    );
+    return { accessToken };
   }
 
   async logout() {
@@ -226,6 +220,17 @@ export class AuthService {
       expiresIn: this.configService.get<string>('JWT_REFRESH_TTL') ?? '7d',
     });
     return { accessToken, refreshToken };
+  }
+
+  private async createPlaceholderUser(curp: string): Promise<User> {
+    return this.usersService.create({
+      nombre: 'Pendiente',
+      apellidos: 'Pendiente',
+      curp,
+      colonia: 'Pendiente',
+      fechaNacimiento: new Date('1970-01-01T00:00:00.000Z'),
+      isActive: false,
+    });
   }
 
   private parseBirthDate(value: string) {
