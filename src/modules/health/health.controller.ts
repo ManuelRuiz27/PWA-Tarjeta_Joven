@@ -5,6 +5,9 @@ import { HealthService } from './health.service';
 class HealthResponseDto {
   @ApiProperty({ example: 'ok' })
   status!: string;
+
+  @ApiProperty({ example: true })
+  db!: boolean;
 }
 
 @ApiTags('Util')
