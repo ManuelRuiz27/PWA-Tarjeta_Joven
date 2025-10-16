@@ -17,12 +17,17 @@ export class PushService {
     }
 
     const existing = await this.prisma.pushSubscription.findUnique({
-      where: { endpoint: dto.endpoint },
+      where: {
+        userId_endpoint: {
+          userId: user.sub,
+          endpoint: dto.endpoint,
+        },
+      },
     });
     if (existing) {
       throw new ConflictException({
         code: 'PUSH_SUBSCRIPTION_EXISTS',
-        message: 'Ya existe una suscripción con ese endpoint',
+        message: 'Ya existe una suscripción con ese endpoint para el usuario',
       });
     }
 
