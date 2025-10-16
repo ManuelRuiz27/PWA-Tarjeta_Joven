@@ -6,8 +6,16 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 
+interface HttpErrorFilterOptions {
+  exposeErrorDetails: boolean;
+}
+
 @Catch()
 export class HttpErrorFilter implements ExceptionFilter {
+  constructor(
+    private readonly options: HttpErrorFilterOptions = { exposeErrorDetails: true },
+  ) {}
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
     const response = ctx.getResponse();
@@ -44,6 +52,18 @@ export class HttpErrorFilter implements ExceptionFilter {
       }
     } else if (exception instanceof Error) {
       message = exception.message;
+    }
+
+    const exposeErrorDetails = this.options.exposeErrorDetails;
+
+    if (!exposeErrorDetails) {
+      const isHttpException = exception instanceof HttpException;
+      if (!isHttpException || status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+        status = HttpStatus.INTERNAL_SERVER_ERROR;
+        message = 'Internal server error';
+        code = 'INTERNAL_ERROR';
+        details = undefined;
+      }
     }
 
     response.status(status).send({

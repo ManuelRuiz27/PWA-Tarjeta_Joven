@@ -6,6 +6,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FastifyRequest } from 'fastify';
+import { AppConfig } from '../../config/app.config';
 
 interface AttemptWindow {
   timestamps: number[];
@@ -18,11 +19,9 @@ export class OtpThrottleGuard implements CanActivate {
   private readonly windowMs: number;
 
   constructor(private readonly configService: ConfigService) {
-    this.limit = Number(this.configService.get<string>('OTP_THROTTLE_LIMIT') ?? '5');
-    const windowSeconds = Number(
-      this.configService.get<string>('OTP_THROTTLE_WINDOW_SECONDS') ?? '60',
-    );
-    this.windowMs = windowSeconds * 1000;
+    const appConfig = this.configService.get<AppConfig>('app');
+    this.limit = appConfig?.rateLimit.otp.max ?? 10;
+    this.windowMs = appConfig?.rateLimit.otp.timeWindowMs ?? 60_000;
   }
 
   canActivate(context: ExecutionContext): boolean {
