@@ -1,3 +1,4 @@
+import { LogLevel } from '@nestjs/common';
 import { registerAs } from '@nestjs/config';
 
 export interface RateLimitConfig {
@@ -14,6 +15,7 @@ export interface AppConfig {
   env: string;
   port: number;
   swaggerPath: string;
+  logLevel: LogLevel;
   cors: CorsConfig;
   rateLimit: {
     global: RateLimitConfig;
@@ -66,6 +68,30 @@ const parseCorsOrigin = (origin: string | undefined, env: string): string | stri
   return env === 'development' ? '*' : false;
 };
 
+const parseLogLevel = (value: string | undefined, env: string): LogLevel => {
+  const normalized = value?.toLowerCase();
+  const defaultLevel: LogLevel = env === 'production' ? 'log' : env === 'test' ? 'warn' : 'debug';
+
+  if (!normalized) {
+    return defaultLevel;
+  }
+
+  const aliases: Record<string, LogLevel> = {
+    info: 'log',
+    warning: 'warn',
+  };
+
+  if (normalized in aliases) {
+    return aliases[normalized];
+  }
+
+  const allowedLevels: LogLevel[] = ['fatal', 'error', 'warn', 'log', 'debug', 'verbose'];
+
+  return allowedLevels.includes(normalized as LogLevel)
+    ? (normalized as LogLevel)
+    : defaultLevel;
+};
+
 export const buildAppConfig = (): AppConfig => {
   const env = process.env.NODE_ENV ?? 'development';
 
@@ -97,6 +123,7 @@ export const buildAppConfig = (): AppConfig => {
     env,
     port: parseNumber(process.env.PORT, 8080),
     swaggerPath: 'docs',
+    logLevel: parseLogLevel(process.env.LOG_LEVEL, env),
     cors: {
       origin: corsOrigin,
       credentials: corsCredentials,
