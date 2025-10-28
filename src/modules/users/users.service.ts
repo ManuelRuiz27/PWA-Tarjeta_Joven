@@ -14,13 +14,17 @@ export class UsersService {
     return this.prisma.user.findUnique({ where: { curp } });
   }
 
+  findByEmail(email: string) {
+    return this.prisma.user.findUnique({ where: { email } });
+  }
+
   async create(data: Prisma.UserCreateInput) {
     return this.prisma.user.create({ data });
   }
 
   mapToResponse(user: User) {
-    const { id, nombre, apellidos, curp, municipio, telefono } = user;
-    return { id, nombre, apellidos, curp, municipio, telefono };
+    const { id, nombre, apellidos, curp, email, municipio, telefono } = user;
+    return { id, nombre, apellidos, curp, email, municipio, telefono };
   }
 
   async getOrFail(id: string) {

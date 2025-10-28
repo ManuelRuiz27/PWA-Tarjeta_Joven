@@ -2,11 +2,10 @@ import { ValidationPipe } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import * as request from 'supertest';
+import request, { Response as SupertestResponse, Test as SuperTestRequest } from 'supertest';
 import { AuthModule } from './auth.module';
 import { PrismaService } from '../../common/services/prisma.service';
 import { OtpSenderService } from './providers/otp-sender.service';
-import { User } from '@prisma/client';
 import { promises as fs } from 'fs';
 import * as path from 'path';
 
@@ -20,23 +19,40 @@ type OtpRequestEntity = {
   createdAt: Date;
 };
 
-type UserEntity = User;
+type HttpServer = Parameters<typeof request>[0];
+
+interface UserEntity {
+  id: string;
+  nombre: string;
+  apellidos: string;
+  curp: string;
+  email: string | null;
+  fechaNacimiento: Date;
+  colonia: string;
+  telefono: string | null;
+  municipio: string | null;
+  isActive: boolean;
+  passwordHash: string | null;
+  createdAt: Date;
+  updatedAt: Date;
+}
 
 const uploadsRoot = path.resolve(process.cwd(), 'uploads', 'users');
+const extractBody = <T>(response: SupertestResponse): T => response.body as T;
 
 class PrismaServiceMock {
-  otpRequests: OtpRequestEntity[] = [];
-  users: UserEntity[] = [];
+  public otpRequests: OtpRequestEntity[] = [];
+  public users: UserEntity[] = [];
   private userCounter = 1;
 
   otpRequest = {
-    findFirst: async ({ where }: { where: { curp: string } }) => {
+    findFirst: ({ where }: { where: { curp: string } }) => {
       const list = this.otpRequests
         .filter((item) => item.curp === where.curp)
         .sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
-      return list[0] ?? null;
+      return Promise.resolve(list[0] ?? null);
     },
-    create: async ({
+    create: ({
       data,
     }: {
       data: {
@@ -56,9 +72,9 @@ class PrismaServiceMock {
         createdAt: new Date(),
       };
       this.otpRequests.push(entity);
-      return entity;
+      return Promise.resolve(entity);
     },
-    update: async ({
+    update: ({
       where,
       data,
     }: {
@@ -67,7 +83,7 @@ class PrismaServiceMock {
     }) => {
       const index = this.otpRequests.findIndex((item) => item.id === where.id);
       if (index === -1) {
-        throw new Error('OTP not found');
+        return Promise.reject(new Error('OTP not found'));
       }
       const existing = this.otpRequests[index];
       const updated: OtpRequestEntity = {
@@ -80,47 +96,58 @@ class PrismaServiceMock {
         codeHash: data.codeHash ?? existing.codeHash,
       };
       this.otpRequests[index] = updated;
-      return updated;
+      return Promise.resolve(updated);
     },
-    delete: async ({ where }: { where: { id: string } }) => {
+    delete: ({ where }: { where: { id: string } }) => {
       const index = this.otpRequests.findIndex((item) => item.id === where.id);
       if (index === -1) {
-        throw new Error('OTP not found');
+        return Promise.reject(new Error('OTP not found'));
       }
       const [removed] = this.otpRequests.splice(index, 1);
-      return removed;
+      return Promise.resolve(removed);
     },
   };
 
   user = {
-    findUnique: async ({ where }: { where: { id?: string; curp?: string } }) => {
+    findUnique: ({
+      where,
+    }: {
+      where: { id?: string; curp?: string; email?: string | null };
+    }) => {
       if (where.id) {
-        return this.users.find((user) => user.id === where.id) ?? null;
+        return Promise.resolve(this.users.find((user) => user.id === where.id) ?? null);
       }
       if (where.curp) {
-        return this.users.find((user) => user.curp === where.curp) ?? null;
+        return Promise.resolve(this.users.find((user) => user.curp === where.curp) ?? null);
       }
-      return null;
+      if (where.email) {
+        return Promise.resolve(
+          this.users.find((user) => user.email === where.email) ?? null,
+        );
+      }
+      return Promise.resolve(null);
     },
-    create: async ({ data }: { data: Partial<UserEntity> & { curp: string } }) => {
+    create: ({ data }: { data: Partial<UserEntity> & { curp: string } }) => {
       const now = new Date();
       const entity: UserEntity = {
         id: `usr_${this.userCounter++}`,
         nombre: data.nombre ?? 'Pendiente',
         apellidos: data.apellidos ?? 'Pendiente',
         curp: data.curp,
+        email: data.email ?? null,
         fechaNacimiento: data.fechaNacimiento ?? now,
         colonia: data.colonia ?? 'Pendiente',
         telefono: data.telefono ?? null,
         municipio: data.municipio ?? null,
         isActive: data.isActive ?? false,
+        passwordHash: data.passwordHash ?? null,
         createdAt: now,
         updatedAt: now,
-      } as UserEntity;
+      };
       this.users.push(entity);
-      return entity;
+      return Promise.resolve(entity);
     },
-    update: async ({
+    update: ({
       where,
       data,
     }: {
@@ -129,39 +156,42 @@ class PrismaServiceMock {
     }) => {
       const index = this.users.findIndex((user) => user.id === where.id);
       if (index === -1) {
-        throw new Error('User not found');
+        return Promise.reject(new Error('User not found'));
       }
       const existing = this.users[index];
       const updated: UserEntity = {
         ...existing,
         ...data,
         updatedAt: new Date(),
-      } as UserEntity;
+      };
       this.users[index] = updated;
-      return updated;
+      return Promise.resolve(updated);
     },
   };
 
-  reset() {
+  reset(): void {
     this.otpRequests = [];
     this.users = [];
     this.userCounter = 1;
   }
 }
 
+class OtpSenderServiceMock {
+  public lastOtp: string | null = null;
+
+  sendOtp(_curp: string, otp: string): Promise<void> {
+    this.lastOtp = otp;
+    return Promise.resolve();
+  }
+}
+
 describe('Auth flow (e2e)', () => {
   let app: NestFastifyApplication;
   let prisma: PrismaServiceMock;
-  const otpSender = {
-    lastOtp: null as string | null,
-    async sendOtp(curp: string, otp: string) {
-      this.lastOtp = otp;
-      return Promise.resolve();
-    },
-  };
+  const otpSender = new OtpSenderServiceMock();
 
   beforeAll(async () => {
-    process.env.JWT_ACCESS_SECRET = 'test_access_secret';
+    process.env.JWT_SECRET = 'test_access_secret';
     process.env.JWT_REFRESH_SECRET = 'test_refresh_secret';
     process.env.JWT_ACCESS_TTL = '60s';
     process.env.JWT_REFRESH_TTL = '7d';
@@ -207,15 +237,15 @@ describe('Auth flow (e2e)', () => {
     await fs.rm(uploadsRoot, { recursive: true, force: true });
   });
 
-  const server = () => app.getHttpServer();
+  const server = (): HttpServer => app.getHttpServer() as HttpServer;
   const curp = 'PEPJ800101HDFLLL01';
 
-  it('envía OTP exitosamente', async () => {
+  it('envÃ­a OTP exitosamente', async () => {
     await request(server()).post('/auth/otp/send').send({ curp }).expect(204);
     expect(otpSender.lastOtp).toHaveLength(6);
   });
 
-  it('verifica OTP válido y devuelve tokens', async () => {
+  it('verifica OTP vÃ¡lido y devuelve tokens', async () => {
     await request(server()).post('/auth/otp/send').send({ curp }).expect(204);
     const otp = otpSender.lastOtp as string;
 
@@ -224,9 +254,10 @@ describe('Auth flow (e2e)', () => {
       .send({ curp, otp })
       .expect(200);
 
-    expect(response.body.accessToken).toBeDefined();
-    expect(response.body.refreshToken).toBeDefined();
-    expect(response.body.user).toMatchObject({ curp });
+    const tokens = extractBody<{ accessToken: string; refreshToken: string; user: Record<string, unknown> }>(response);
+    expect(tokens.accessToken).toBeDefined();
+    expect(tokens.refreshToken).toBeDefined();
+    expect(tokens.user).toMatchObject({ curp });
   });
 
   it('rechaza OTP expirado', async () => {
@@ -238,12 +269,13 @@ describe('Auth flow (e2e)', () => {
       .post('/auth/otp/verify')
       .send({ curp, otp: otpSender.lastOtp })
       .expect(400)
-      .expect(({ body }) => {
-        expect(body.code).toBe('OTP_EXPIRED');
+      .expect((response: SupertestResponse) => {
+        const payload = extractBody<{ code: string }>(response);
+        expect(payload.code).toBe('OTP_EXPIRED');
       });
   });
 
-  it('limita reenvíos por CURP', async () => {
+  it('limita reenvÃ­os por CURP', async () => {
     await request(server()).post('/auth/otp/send').send({ curp }).expect(204);
     prisma.otpRequests[0].createdAt = new Date(Date.now() - 31_000);
 
@@ -254,8 +286,9 @@ describe('Auth flow (e2e)', () => {
       .post('/auth/otp/send')
       .send({ curp })
       .expect(403)
-      .expect(({ body }) => {
-        expect(body.code).toBe('OTP_MAX_RESENDS');
+      .expect((response: SupertestResponse) => {
+        const payload = extractBody<{ code: string }>(response);
+        expect(payload.code).toBe('OTP_MAX_RESENDS');
       });
   });
 
@@ -266,16 +299,19 @@ describe('Auth flow (e2e)', () => {
       .post('/auth/otp/send')
       .send({ curp })
       .expect(403)
-      .expect(({ body }) => {
-        expect(body.code).toBe('OTP_COOLDOWN');
+      .expect((response: SupertestResponse) => {
+        const payload = extractBody<{ code: string }>(response);
+        expect(payload.code).toBe('OTP_COOLDOWN');
       });
   });
 
   describe('registro de usuarios', () => {
-    const buildRequest = (overrides: Record<string, string> = {}) => {
+    const buildRequest = (
+      overrides: Record<string, string> = {},
+    ): SuperTestRequest => {
       const payload: Record<string, string> = {
         nombre: 'Juan',
-        apellidos: 'Pérez',
+        apellidos: 'PA�Acrez',
         fechaNacimiento: '01/02/2000',
         curp: overrides.curp ?? 'AAAA000101HDFLNS12',
         colonia: 'Centro',
@@ -289,14 +325,15 @@ describe('Auth flow (e2e)', () => {
         payload.municipio = overrides.municipio;
       }
 
-      let req = request(server()).post('/auth/register');
+      const formRequest: SuperTestRequest = request(server()).post('/auth/register');
       for (const [key, value] of Object.entries(payload)) {
-        req = req.field(key, value);
+        formRequest.field(key, value);
       }
-      return req;
+      return formRequest;
     };
 
-    const attachDefaultFiles = (req: request.SuperTest<request.Test>) =>
+
+    const attachDefaultFiles = (req: SuperTestRequest): SuperTestRequest =>
       req
         .attach('ine', Buffer.from('fake-ine'), {
           filename: 'ine.png',
@@ -314,15 +351,16 @@ describe('Auth flow (e2e)', () => {
     it('registra al usuario y persiste los archivos', async () => {
       const response = await attachDefaultFiles(buildRequest()).expect(201);
 
-      expect(response.body.userId).toBeDefined();
-      const userId = response.body.userId as string;
+      const creationPayload = extractBody<{ userId: string }>(response);
+      expect(creationPayload.userId).toBeDefined();
+      const userId = creationPayload.userId;
 
       const storedUser = prisma.users.find(
         (user) => user.curp === 'AAAA000101HDFLNS12',
       );
       expect(storedUser).toMatchObject({
         nombre: 'Juan',
-        apellidos: 'Pérez',
+        apellidos: 'PÃ©rez',
         colonia: 'Centro',
         isActive: true,
       });
@@ -351,8 +389,9 @@ describe('Auth flow (e2e)', () => {
           contentType: 'image/jpeg',
         })
         .expect(400)
-        .expect(({ body }) => {
-          expect(body.code).toBe('FILE_TOO_LARGE');
+        .expect((response: SupertestResponse) => {
+          const payload = extractBody<{ code: string }>(response);
+          expect(payload.code).toBe('FILE_TOO_LARGE');
         });
 
       expect(prisma.users).toHaveLength(0);
@@ -373,8 +412,9 @@ describe('Auth flow (e2e)', () => {
           contentType: 'image/jpeg',
         })
         .expect(400)
-        .expect(({ body }) => {
-          expect(body.code).toBe('FILE_TYPE_NOT_ALLOWED');
+        .expect((response: SupertestResponse) => {
+          const payload = extractBody<{ code: string }>(response);
+          expect(payload.code).toBe('FILE_TYPE_NOT_ALLOWED');
         });
     });
 
@@ -383,8 +423,9 @@ describe('Auth flow (e2e)', () => {
 
       await attachDefaultFiles(buildRequest())
         .expect(409)
-        .expect(({ body }) => {
-          expect(body.code).toBe('USER_ALREADY_REGISTERED');
+        .expect((response: SupertestResponse) => {
+          const payload = extractBody<{ code: string }>(response);
+          expect(payload.code).toBe('USER_ALREADY_REGISTERED');
         });
     });
   });

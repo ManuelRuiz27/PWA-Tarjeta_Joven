@@ -2,7 +2,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { Prisma } from '@prisma/client';
-import * as request from 'supertest';
+import request, { Response as SupertestResponse } from 'supertest';
 import { CatalogModule } from './catalog.module';
 import { PrismaService } from '../../common/services/prisma.service';
 
@@ -20,14 +20,33 @@ type MerchantEntity = {
   activo: boolean;
 };
 
+type CatalogListItem = Omit<MerchantEntity, 'activo'>;
+
+type CatalogListResponse = {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  items: CatalogListItem[];
+};
+
+type CatalogErrorResponse = {
+  statusCode: number;
+  code: string;
+  message: string;
+  error: string;
+};
+
+const extractBody = <T>(response: SupertestResponse): T => response.body as T;
+
 class PrismaServiceMock {
   private merchants: MerchantEntity[] = [];
 
   merchant = {
-    count: async ({ where }: { where?: Prisma.MerchantWhereInput }) => {
-      return this.filterMerchants(where).length;
+    count: ({ where }: { where?: Prisma.MerchantWhereInput }): Promise<number> => {
+      return Promise.resolve(this.filterMerchants(where).length);
     },
-    findMany: async ({
+    findMany: ({
       where,
       orderBy,
       skip = 0,
@@ -37,45 +56,58 @@ class PrismaServiceMock {
       orderBy?: Prisma.MerchantOrderByWithRelationInput;
       skip?: number;
       take?: number;
-    }) => {
+    }): Promise<CatalogListItem[]> => {
       const filtered = this.filterMerchants(where);
-      const sorted = orderBy?.nombre === 'asc'
-        ? [...filtered].sort((a, b) => a.nombre.localeCompare(b.nombre))
-        : filtered;
+      const sorted =
+        orderBy?.nombre === 'asc'
+          ? [...filtered].sort((a, b) => a.nombre.localeCompare(b.nombre))
+          : filtered;
       const start = skip ?? 0;
       const end = typeof take === 'number' ? start + take : undefined;
-      return sorted.slice(start, end).map(({ activo, ...item }) => ({ ...item }));
+      return Promise.resolve(
+        sorted.slice(start, end).map(({ activo: _activo, ...item }) => ({ ...item })),
+      );
     },
-    findUnique: async ({
+    findUnique: ({
       where,
       select,
     }: {
       where: { id: string };
       select?: Partial<Record<keyof MerchantEntity, boolean>>;
-    }) => {
+    }): Promise<Partial<MerchantEntity> | null> => {
       const merchant =
         this.merchants.find((candidate) => candidate.id === where.id) ?? null;
       if (!merchant) {
-        return null;
+        return Promise.resolve(null);
       }
       if (!select) {
-        return { ...merchant };
+        return Promise.resolve({ ...merchant });
       }
-      return Object.entries(select).reduce((acc, [key, isSelected]) => {
+      const projection = Object.entries(select).reduce((acc, [key, isSelected]) => {
         if (isSelected) {
           acc[key as keyof MerchantEntity] = merchant[key as keyof MerchantEntity];
         }
         return acc;
       }, {} as Partial<MerchantEntity>);
+      return Promise.resolve(projection);
     },
   };
 
-  async $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
+  $transaction<T>(operations: Promise<T>[]): Promise<T[]> {
     return Promise.all(operations);
   }
 
   setMerchants(list: MerchantEntity[]) {
     this.merchants = list;
+  }
+
+  private normalizeWhereClause(
+    clause?: Prisma.MerchantWhereInput | Prisma.MerchantWhereInput[],
+  ): Prisma.MerchantWhereInput[] {
+    if (!clause) {
+      return [];
+    }
+    return Array.isArray(clause) ? clause : [clause];
   }
 
   private filterMerchants(where?: Prisma.MerchantWhereInput) {
@@ -96,15 +128,18 @@ class PrismaServiceMock {
       return false;
     }
 
-    if (AND && !AND.every((clause) => this.matchesWhere(merchant, clause))) {
+    const andClauses = this.normalizeWhereClause(AND);
+    if (andClauses.length > 0 && !andClauses.every((clause) => this.matchesWhere(merchant, clause))) {
       return false;
     }
 
-    if (OR && !OR.some((clause) => this.matchesWhere(merchant, clause))) {
+    const orClauses = this.normalizeWhereClause(OR);
+    if (orClauses.length > 0 && !orClauses.some((clause) => this.matchesWhere(merchant, clause))) {
       return false;
     }
 
-    if (NOT && NOT.some((clause) => this.matchesWhere(merchant, clause))) {
+    const notClauses = this.normalizeWhereClause(NOT);
+    if (notClauses.some((clause) => this.matchesWhere(merchant, clause))) {
       return false;
     }
 
@@ -247,18 +282,21 @@ describe('CatalogController (e2e)', () => {
     const response = await request(app.getHttpServer()).get('/catalog');
 
     expect(response.status).toBe(200);
-    expect(response.body.page).toBe(1);
-    expect(response.body.pageSize).toBe(20);
-    expect(response.body.total).toBe(4);
-    expect(response.body.totalPages).toBe(1);
-    expect(response.body.items).toHaveLength(4);
-    expect(response.body.items.map((item: any) => item.nombre)).toEqual([
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.page).toBe(1);
+    expect(payload.pageSize).toBe(20);
+    expect(payload.total).toBe(4);
+    expect(payload.totalPages).toBe(1);
+    expect(payload.items).toHaveLength(4);
+    expect(payload.items.map((item) => item.nombre)).toEqual([
       'Arte Local',
       'Bon Appetit',
       'Cine Club',
       'Zapopan Bites',
     ]);
-    expect(response.body.items[0]).toMatchObject({
+    expect(payload.items[0]).toMatchObject({
       id: 'mrc_1',
       categoria: 'artesania',
       municipio: 'Guadalajara',
@@ -277,8 +315,11 @@ describe('CatalogController (e2e)', () => {
       .query({ categoria: 'restaurantes' });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(2);
-    expect(response.body.items.map((item: any) => item.nombre)).toEqual([
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.total).toBe(2);
+    expect(payload.items.map((item) => item.nombre)).toEqual([
       'Bon Appetit',
       'Zapopan Bites',
     ]);
@@ -290,8 +331,11 @@ describe('CatalogController (e2e)', () => {
       .query({ municipio: 'zapopan' });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(2);
-    expect(response.body.items.map((item: any) => item.nombre)).toEqual([
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.total).toBe(2);
+    expect(payload.items.map((item) => item.nombre)).toEqual([
       'Cine Club',
       'Zapopan Bites',
     ]);
@@ -303,8 +347,11 @@ describe('CatalogController (e2e)', () => {
       .query({ q: 'hamburguesa' });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(1);
-    expect(response.body.items[0].nombre).toBe('Zapopan Bites');
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.total).toBe(1);
+    expect(payload.items[0]?.nombre).toBe('Zapopan Bites');
   });
 
   it('should combine filters', async () => {
@@ -317,8 +364,11 @@ describe('CatalogController (e2e)', () => {
       });
 
     expect(response.status).toBe(200);
-    expect(response.body.total).toBe(1);
-    expect(response.body.items[0].id).toBe('mrc_3');
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.total).toBe(1);
+    expect(payload.items[0]?.id).toBe('mrc_3');
   });
 
   it('should cap page size to maximum allowed', async () => {
@@ -338,17 +388,23 @@ describe('CatalogController (e2e)', () => {
       .query({ pageSize: 100 });
 
     expect(response.status).toBe(200);
-    expect(response.body.pageSize).toBe(50);
-    expect(response.body.items).toHaveLength(50);
-    expect(response.body.total).toBe(60);
-    expect(response.body.totalPages).toBe(2);
+
+    const payload = extractBody<CatalogListResponse>(response);
+
+    expect(payload.pageSize).toBe(50);
+    expect(payload.items).toHaveLength(50);
+    expect(payload.total).toBe(60);
+    expect(payload.totalPages).toBe(2);
   });
 
   it('should return merchant details', async () => {
     const response = await request(app.getHttpServer()).get('/catalog/mrc_1');
 
     expect(response.status).toBe(200);
-    expect(response.body).toEqual({
+
+    const payload = extractBody<CatalogListItem>(response);
+
+    expect(payload).toEqual({
       id: 'mrc_1',
       nombre: 'Arte Local',
       categoria: 'artesania',
@@ -366,7 +422,10 @@ describe('CatalogController (e2e)', () => {
     const response = await request(app.getHttpServer()).get('/catalog/mrc_5');
 
     expect(response.status).toBe(404);
-    expect(response.body).toEqual({
+
+    const payload = extractBody<CatalogErrorResponse>(response);
+
+    expect(payload).toEqual({
       statusCode: 404,
       code: 'MERCHANT_NOT_FOUND',
       message: 'Comercio no encontrado',

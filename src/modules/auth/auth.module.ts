@@ -17,8 +17,8 @@ import { StorageModule } from '../../common/storage/storage.module';
     JwtModule.registerAsync({
       imports: [ConfigModule],
       inject: [ConfigService],
-      useFactory: async (configService: ConfigService) => ({
-        secret: configService.get<string>('JWT_ACCESS_SECRET') ?? 'dev_access_secret',
+      useFactory: (configService: ConfigService) => ({
+        secret: configService.getOrThrow<string>('JWT_SECRET'),
         signOptions: {
           expiresIn: configService.get<string>('JWT_ACCESS_TTL') ?? '900s',
         },

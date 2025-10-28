@@ -25,12 +25,25 @@ export class VersionService {
   private loadVersion(): string {
     try {
       const packageJsonPath = join(process.cwd(), 'package.json');
-      const packageJson = JSON.parse(readFileSync(packageJsonPath, 'utf8'));
-      return typeof packageJson.version === 'string'
-        ? packageJson.version
-        : '0.0.0';
-    } catch (error) {
+      const contents = readFileSync(packageJsonPath, 'utf8');
+      const parsed = JSON.parse(contents) as unknown;
+
+      if (this.isPackageJson(parsed)) {
+        return parsed.version;
+      }
+
+      return '0.0.0';
+    } catch {
       return '0.0.0';
     }
+  }
+
+  private isPackageJson(value: unknown): value is { version: string } {
+    return (
+      typeof value === 'object' &&
+      value !== null &&
+      'version' in value &&
+      typeof (value as { version?: unknown }).version === 'string'
+    );
   }
 }

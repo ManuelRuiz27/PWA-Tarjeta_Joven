@@ -8,8 +8,8 @@ RUN npm install --legacy-peer-deps
 
 FROM deps AS build
 COPY . .
-RUN npm run build
 RUN npx prisma generate
+RUN npm run build
 
 FROM deps AS production-deps
 COPY prisma ./prisma

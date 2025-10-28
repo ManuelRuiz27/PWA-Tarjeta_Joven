@@ -9,7 +9,8 @@ import { Injectable, Logger } from '@nestjs/common';
 export class OtpSenderService {
   private readonly logger = new Logger(OtpSenderService.name);
 
-  async sendOtp(curp: string, otp: string): Promise<void> {
+  sendOtp(curp: string, otp: string): Promise<void> {
     this.logger.log(`OTP for CURP ${curp}: ${otp}`);
+    return Promise.resolve();
   }
 }

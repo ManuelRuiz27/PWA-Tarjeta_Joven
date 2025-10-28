@@ -9,6 +9,7 @@ export interface RateLimitConfig {
 export interface CorsConfig {
   origin: string | string[] | boolean;
   credentials: boolean;
+  methods: string[];
 }
 
 export interface AppConfig {
@@ -127,6 +128,7 @@ export const buildAppConfig = (): AppConfig => {
     cors: {
       origin: corsOrigin,
       credentials: corsCredentials,
+      methods: ['GET', 'POST', 'PUT', 'DELETE'],
     },
     rateLimit: {
       global: {

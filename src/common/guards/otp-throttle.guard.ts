@@ -1,8 +1,9 @@
 import {
   CanActivate,
   ExecutionContext,
+  HttpException,
+  HttpStatus,
   Injectable,
-  TooManyRequestsException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { FastifyRequest } from 'fastify';
@@ -36,10 +37,13 @@ export class OtpThrottleGuard implements CanActivate {
 
     if (window.timestamps.length >= this.limit) {
       this.attempts.set(ip, window);
-      throw new TooManyRequestsException({
-        code: 'OTP_RATE_LIMIT',
-        message: 'Demasiados intentos de envío. Inténtalo más tarde.',
-      });
+      throw new HttpException(
+        {
+          code: 'OTP_RATE_LIMIT',
+          message: 'Demasiados intentos de envio. Intentalo mas tarde.',
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
     }
 
     window.timestamps.push(now);

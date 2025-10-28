@@ -4,6 +4,7 @@ import {
   ForbiddenException,
   Inject,
   Injectable,
+  UnauthorizedException,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
@@ -12,6 +13,7 @@ import { UsersService } from '../users/users.service';
 import { SendOtpDto } from './dto/send-otp.dto';
 import { VerifyOtpDto } from './dto/verify-otp.dto';
 import { RegisterDto } from './dto/register.dto';
+import { LoginDto } from './dto/login.dto';
 import { AuthTokensDto } from './dto/auth-tokens.dto';
 import * as bcrypt from 'bcryptjs';
 import { OtpSenderService } from './providers/otp-sender.service';
@@ -56,6 +58,33 @@ export class AuthService {
     this.otpCooldownSeconds = Number(
       this.configService.get<string>('OTP_COOLDOWN_SECONDS') ?? '60',
     );
+  }
+
+  async login({ email, password }: LoginDto): Promise<AuthTokensDto> {
+    const normalizedEmail = email.trim().toLowerCase();
+    const user = await this.usersService.findByEmail(normalizedEmail);
+
+    if (!user || !user.passwordHash) {
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Credenciales invalidas',
+      });
+    }
+
+    const isPasswordValid = await bcrypt.compare(password, user.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException({
+        code: 'INVALID_CREDENTIALS',
+        message: 'Credenciales invalidas',
+      });
+    }
+
+    const tokens = await this.createTokens(user.id, user.curp);
+
+    return {
+      ...tokens,
+      user: this.usersService.mapToResponse(user),
+    };
   }
 
   async sendOtp({ curp }: SendOtpDto): Promise<void> {
@@ -171,6 +200,7 @@ export class AuthService {
 
   async register(data: RegisterDto) {
     const normalizedCurp = data.curp.toUpperCase();
+    const normalizedEmail = data.email.trim().toLowerCase();
     const birthDate = this.parseBirthDate(data.fechaNacimiento);
 
     if (!birthDate) {
@@ -192,6 +222,14 @@ export class AuthService {
     const comprobanteFile = await this.prepareIncomingFile('comprobante', data.comprobante);
 
     const existing = await this.usersService.findByCurp(normalizedCurp);
+    const emailOwner = await this.usersService.findByEmail(normalizedEmail);
+
+    if (emailOwner && (!existing || emailOwner.id !== existing.id)) {
+      throw new ConflictException({
+        code: 'EMAIL_ALREADY_REGISTERED',
+        message: 'Ya existe un usuario registrado con este correo',
+      });
+    }
 
     if (existing && existing.isActive) {
       throw new ConflictException({
@@ -200,15 +238,19 @@ export class AuthService {
       });
     }
 
+    const passwordHash = await bcrypt.hash(data.password, 10);
+
     const payload = {
       nombre: data.nombre,
       apellidos: data.apellidos,
       fechaNacimiento: birthDate,
       colonia: data.colonia,
       curp: normalizedCurp,
+      email: normalizedEmail,
       municipio: data.municipio ?? null,
       telefono: data.telefono ?? null,
       isActive: true,
+      passwordHash,
     };
 
     const user = existing
@@ -231,21 +273,19 @@ export class AuthService {
     const accessToken = await this.jwtService.signAsync(
       { sub: payload.sub, curp: payload.curp },
       {
-        secret: this.configService.getOrThrow('JWT_ACCESS_SECRET'),
+        secret: this.configService.getOrThrow('JWT_SECRET'),
         expiresIn: this.configService.get<string>('JWT_ACCESS_TTL') ?? '900s',
       },
     );
     return { accessToken };
   }
 
-  async logout() {
-    return;
-  }
+  logout(): void {}
 
   private async createTokens(userId: string, curp: string) {
     const payload = { sub: userId, curp };
     const accessToken = await this.jwtService.signAsync(payload, {
-      secret: this.configService.getOrThrow('JWT_ACCESS_SECRET'),
+      secret: this.configService.getOrThrow('JWT_SECRET'),
       expiresIn: this.configService.get<string>('JWT_ACCESS_TTL') ?? '900s',
     });
     const refreshToken = await this.jwtService.signAsync(payload, {
@@ -260,6 +300,7 @@ export class AuthService {
       nombre: 'Pendiente',
       apellidos: 'Pendiente',
       curp,
+      email: null,
       colonia: 'Pendiente',
       fechaNacimiento: new Date('1970-01-01T00:00:00.000Z'),
       isActive: false,

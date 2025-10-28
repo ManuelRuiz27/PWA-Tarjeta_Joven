@@ -1,16 +1,16 @@
 import {
   HttpStatus,
   LoggerService,
+  PayloadTooLargeException,
   RequestMethod,
   ValidationPipe,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { NestFastifyApplication } from '@nestjs/platform-fastify';
-import fastifyCors from '@fastify/cors';
 import helmet from '@fastify/helmet';
 import multipart from '@fastify/multipart';
 import rateLimit from '@fastify/rate-limit';
-import { FastifyReply, FastifyRequest } from 'fastify';
+import { FastifyRequest } from 'fastify';
 import { AppConfig } from '../../config/app.config';
 import { HttpErrorFilter } from '../filters/http-exception.filter';
 
@@ -45,39 +45,64 @@ const matchesOtpSendRoute = (url: string | undefined): boolean => {
   return normalized.endsWith('/auth/otp/send');
 };
 
-const enforceMultipartTotalLimit = (
-  request: FastifyRequest,
-  reply: FastifyReply,
-  totalLimit: number,
-) => {
-  if (totalLimit <= 0) {
-    return false;
-  }
-
+const isMultipartRequest = (request: FastifyRequest): boolean => {
   const contentType = normalizeHeaderValue(request.headers['content-type']);
-  if (!contentType || !contentType.startsWith('multipart/form-data')) {
-    return false;
+  return Boolean(contentType?.startsWith('multipart/form-data'));
+};
+
+const calculateMultipartBodySize = (
+  payload: unknown,
+  visited: WeakSet<object> = new WeakSet(),
+): number => {
+  if (!payload) {
+    return 0;
   }
 
-  const contentLengthHeader = normalizeHeaderValue(request.headers['content-length']);
-  if (!contentLengthHeader) {
-    return false;
+  if (Buffer.isBuffer(payload)) {
+    return payload.length;
   }
 
-  const contentLength = Number(contentLengthHeader);
-  if (!Number.isFinite(contentLength) || contentLength <= totalLimit) {
-    return false;
+  if (Array.isArray(payload)) {
+    return payload.reduce<number>(
+      (total, item) => total + calculateMultipartBodySize(item, visited),
+      0,
+    );
   }
 
-  reply
-    .code(HttpStatus.PAYLOAD_TOO_LARGE)
-    .send({
-      statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
-      code: 'PAYLOAD_TOO_LARGE',
-      message: 'Multipart payload too large',
-    });
+  if (typeof payload === 'object') {
+    const value = payload as Record<string, unknown>;
 
-  return true;
+    if (visited.has(value)) {
+      return 0;
+    }
+    visited.add(value);
+
+    if ('_buf' in value && Buffer.isBuffer(value._buf)) {
+      return value._buf.length;
+    }
+
+    if ('data' in value && Buffer.isBuffer(value.data)) {
+      return value.data.length;
+    }
+
+    if ('value' in value && typeof value.value === 'string') {
+      return Buffer.byteLength(value.value);
+    }
+
+    return Object.entries(value).reduce<number>((total, [key, child]) => {
+      if (key === 'fields' || key === 'file') {
+        return total;
+      }
+
+      return total + calculateMultipartBodySize(child, visited);
+    }, 0);
+  }
+
+  if (typeof payload === 'string') {
+    return Buffer.byteLength(payload);
+  }
+
+  return 0;
 };
 
 export const configureApp = async (
@@ -114,12 +139,6 @@ export const configureApp = async (
     hsts: isProduction
       ? { maxAge: 31536000, includeSubDomains: true, preload: true }
       : false,
-  });
-
-  const corsOrigin = appConfig.cors.origin;
-  await app.register(fastifyCors, {
-    origin: corsOrigin,
-    credentials: corsOrigin === '*' ? false : appConfig.cors.credentials,
   });
 
   const fastifyInstance = app.getHttpAdapter().getInstance();
@@ -168,11 +187,26 @@ export const configureApp = async (
     },
   });
 
-  fastifyInstance.addHook('onRequest', (request, reply, done) => {
-    const blocked = enforceMultipartTotalLimit(request, reply, appConfig.limits.multipart.total);
-    if (!blocked) {
+  fastifyInstance.addHook('preValidation', (request, _reply, done) => {
+    const totalLimit = appConfig.limits.multipart.total;
+    if (totalLimit <= 0 || !isMultipartRequest(request)) {
       done();
+      return;
     }
+
+    const totalSize = calculateMultipartBodySize(request.body);
+    if (totalSize > totalLimit) {
+      done(
+        new PayloadTooLargeException({
+          statusCode: HttpStatus.PAYLOAD_TOO_LARGE,
+          code: 'PAYLOAD_TOO_LARGE',
+          message: 'Multipart payload too large',
+        }),
+      );
+      return;
+    }
+
+    done();
   });
 
   app.useGlobalFilters(

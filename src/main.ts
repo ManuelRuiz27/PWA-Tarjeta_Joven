@@ -1,3 +1,4 @@
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import {
   FastifyAdapter,
@@ -5,8 +6,10 @@ import {
 } from '@nestjs/platform-fastify';
 import { SwaggerModule } from '@nestjs/swagger';
 import * as Sentry from '@sentry/node';
+import cors from 'cors';
 import { AppModule } from './app.module';
 import { configureApp } from './common/bootstrap/configure-app';
+import { buildCorsOptions } from './common/bootstrap/cors.options';
 import { JsonLoggerService } from './common/logging/json-logger.service';
 import { buildAppConfig } from './config/app.config';
 import { buildSwaggerConfig } from './config/swagger.config';
@@ -71,6 +74,8 @@ async function bootstrap() {
   app.useLogger(logger);
   app.flushLogs();
 
+  app.use(cors(buildCorsOptions(initialConfig)));
+
   const appConfig = await configureApp(app, {
     logger,
     captureException,
@@ -88,4 +93,4 @@ async function bootstrap() {
   });
 }
 
-bootstrap();
+void bootstrap();

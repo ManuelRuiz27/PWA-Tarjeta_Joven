@@ -13,6 +13,9 @@ export class UserResponseDto {
   @ApiProperty({ example: 'PEPJ800101HDFLLL01' })
   curp!: string;
 
+  @ApiProperty({ nullable: true, example: 'usuario@example.com' })
+  email?: string | null;
+
   @ApiProperty({ nullable: true, example: 'Guadalajara' })
   municipio?: string | null;
 

@@ -1,12 +1,7 @@
-import {
-  CanActivate,
-  ExecutionContext,
-  Injectable,
-  UnauthorizedException,
-} from '@nestjs/common';
+import { Injectable, NestMiddleware, UnauthorizedException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
-import { FastifyRequest } from 'fastify';
+import { FastifyReply, FastifyRequest } from 'fastify';
 import { AuthenticatedUser } from '../decorators/current-user.decorator';
 
 type FastifyRequestWithUser = FastifyRequest & {
@@ -14,7 +9,7 @@ type FastifyRequestWithUser = FastifyRequest & {
 };
 
 @Injectable()
-export class JwtAuthGuard implements CanActivate {
+export class AuthenticateTokenMiddleware implements NestMiddleware {
   private readonly jwtService: JwtService;
 
   constructor(private readonly configService: ConfigService) {
@@ -23,9 +18,12 @@ export class JwtAuthGuard implements CanActivate {
     });
   }
 
-  async canActivate(context: ExecutionContext): Promise<boolean> {
-    const request = context.switchToHttp().getRequest<FastifyRequestWithUser>();
-    const authHeader = request.headers['authorization'];
+  async use(
+    req: FastifyRequestWithUser,
+    _res: FastifyReply,
+    next: (error?: unknown) => void,
+  ): Promise<void> {
+    const authHeader = req.headers['authorization'];
 
     if (!authHeader || Array.isArray(authHeader)) {
       throw new UnauthorizedException({
@@ -44,8 +42,8 @@ export class JwtAuthGuard implements CanActivate {
 
     try {
       const payload = await this.jwtService.verifyAsync<AuthenticatedUser>(token);
-      request.user = payload;
-      return true;
+      req.user = payload;
+      next();
     } catch {
       throw new UnauthorizedException({
         code: 'INVALID_TOKEN',

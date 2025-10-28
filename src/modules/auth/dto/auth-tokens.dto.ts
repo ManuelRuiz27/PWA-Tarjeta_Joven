@@ -16,6 +16,7 @@ export class AuthTokensDto {
       nombre: 'Juan',
       apellidos: 'Pérez López',
       curp: 'PEPJ800101HDFLLL01',
+      email: 'usuario@example.com',
       municipio: 'Guadalajara',
       telefono: '3312345678',
     },

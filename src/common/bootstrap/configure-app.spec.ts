@@ -1,11 +1,11 @@
-import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
+﻿import { Body, Controller, HttpCode, HttpStatus, Post } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
 import { Test } from '@nestjs/testing';
 import {
   FastifyAdapter,
   NestFastifyApplication,
 } from '@nestjs/platform-fastify';
-import * as request from 'supertest';
+import request from 'supertest';
 import appConfig, { buildAppConfig } from '../../config/app.config';
 import { configureApp } from './configure-app';
 
@@ -35,10 +35,12 @@ class AuthTestController {
   }
 }
 
+type HttpServer = Parameters<typeof request>[0];
+
 describe('configureApp security hardening', () => {
   let app: NestFastifyApplication | null = null;
 
-  const createApp = async () => {
+  const createApp = async (): Promise<NestFastifyApplication> => {
     const moduleRef = await Test.createTestingModule({
       imports: [
         ConfigModule.forRoot({
@@ -73,7 +75,7 @@ describe('configureApp security hardening', () => {
 
   it('rejects JSON payloads larger than the configured limit', async () => {
     app = await createApp();
-    const server = app.getHttpServer();
+    const server = app.getHttpServer() as HttpServer;
 
     const oversizedPayload = 'x'.repeat(1 * 1024 * 1024 + 1);
 
@@ -86,7 +88,7 @@ describe('configureApp security hardening', () => {
 
   it('rejects multipart payloads exceeding per-file size', async () => {
     app = await createApp();
-    const server = app.getHttpServer();
+    const server = app.getHttpServer() as HttpServer;
 
     const largeFile = Buffer.alloc(2 * 1024 * 1024 + 1);
 
@@ -102,27 +104,27 @@ describe('configureApp security hardening', () => {
 
   it('rejects multipart payloads exceeding the total size limit', async () => {
     app = await createApp();
-    const server = app.getHttpServer();
+    const server = app.getHttpServer() as HttpServer;
 
     const partSize = Math.floor(1.8 * 1024 * 1024);
     const chunk = Buffer.alloc(partSize, 1);
 
-    let multipartRequest = request(server).post('/api/v1/security-test/upload');
+    const multipartRequest = request(server).post(
+      '/api/v1/security-test/upload',
+    );
     for (let index = 0; index < 6; index += 1) {
-      multipartRequest = multipartRequest.attach(`file${index}`, chunk, {
+      multipartRequest.attach(`file${index}`, chunk, {
         filename: `file${index}.bin`,
         contentType: 'application/octet-stream',
       });
     }
 
-    const response = await multipartRequest;
-
-    expect(response.status).toBe(HttpStatus.PAYLOAD_TOO_LARGE);
+    await multipartRequest.expect(HttpStatus.PAYLOAD_TOO_LARGE);
   });
 
   it('applies a tighter rate limit to the OTP endpoint', async () => {
     app = await createApp();
-    const server = app.getHttpServer();
+    const server = app.getHttpServer() as HttpServer;
 
     for (let attempt = 0; attempt < 10; attempt += 1) {
       await request(server)

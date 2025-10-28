@@ -10,7 +10,7 @@ export class HealthService {
     try {
       await this.prisma.$queryRaw`SELECT 1`;
       dbHealthy = true;
-    } catch (error) {
+    } catch {
       dbHealthy = false;
     }
 

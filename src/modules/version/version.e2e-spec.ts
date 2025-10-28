@@ -3,8 +3,10 @@ import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
 import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import * as request from 'supertest';
+import request from 'supertest';
 import { VersionModule } from './version.module';
+
+type HttpServer = Parameters<typeof request>[0];
 
 describe('VersionController (e2e)', () => {
   let app: NestFastifyApplication;
@@ -54,7 +56,7 @@ describe('VersionController (e2e)', () => {
   it('returns the package version and commit from GIT_COMMIT_SHORT', async () => {
     process.env.GIT_COMMIT_SHORT = 'abc1234';
 
-    const response = await request(app.getHttpServer()).get('/version');
+    const response = await request(app.getHttpServer() as HttpServer).get('/version');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ version: packageVersion, commit: 'abc1234' });
@@ -66,7 +68,7 @@ describe('VersionController (e2e)', () => {
     process.env.VERCEL_GIT_COMMIT_SHA = undefined;
     process.env.COMMIT_SHA = undefined;
 
-    const response = await request(app.getHttpServer()).get('/version');
+    const response = await request(app.getHttpServer() as HttpServer).get('/version');
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ version: packageVersion, commit: 'unknown' });

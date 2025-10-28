@@ -7,9 +7,13 @@ export interface AuthenticatedUser {
   [key: string]: unknown;
 }
 
+type FastifyRequestWithUser = FastifyRequest & {
+  user?: AuthenticatedUser;
+};
+
 export const CurrentUser = createParamDecorator(
   (_: unknown, ctx: ExecutionContext): AuthenticatedUser | null => {
-    const request = ctx.switchToHttp().getRequest<FastifyRequest>();
-    return (request as any).user ?? null;
+    const request = ctx.switchToHttp().getRequest<FastifyRequestWithUser>();
+    return request.user ?? null;
   },
 );

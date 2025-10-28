@@ -6,12 +6,15 @@ import {
 } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import * as request from 'supertest';
+import request from 'supertest';
 import { FastifyRequest } from 'fastify';
 import { PushModule } from './push.module';
 import { PrismaService } from '../../common/services/prisma.service';
 import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
 import { JwtAuthGuard } from '../../common/guards/jwt-auth.guard';
+
+type HttpServer = Parameters<typeof request>[0];
+type AuthenticatedFastifyRequest = FastifyRequest & { user?: AuthenticatedUser };
 
 interface UserEntity {
   id: string;
@@ -27,23 +30,32 @@ interface PushSubscriptionEntity {
   createdAt: Date;
 }
 
+interface PushSubscriptionResponse {
+  id: string;
+  userId: string;
+  endpoint: string;
+  p256dh: string;
+  auth: string;
+  createdAt: string;
+}
+
 class PrismaServiceMock {
   private users: UserEntity[] = [];
   private pushSubscriptions: PushSubscriptionEntity[] = [];
   private counter = 1;
 
   user = {
-    findUnique: async ({ where }: { where: { id?: string } }) => {
+    findUnique: ({ where }: { where: { id?: string } }) => {
       if (!where.id) {
-        return null;
+        return Promise.resolve(null);
       }
       const user = this.users.find((candidate) => candidate.id === where.id);
-      return user ? { ...user } : null;
+      return Promise.resolve(user ? { ...user } : null);
     },
   };
 
   pushSubscription = {
-    findUnique: async ({
+    findUnique: ({
       where,
     }: {
       where:
@@ -52,7 +64,7 @@ class PrismaServiceMock {
     }) => {
       if ('id' in where && where.id) {
         const subscription = this.pushSubscriptions.find((item) => item.id === where.id);
-        return subscription ? { ...subscription } : null;
+        return Promise.resolve(subscription ? { ...subscription } : null);
       }
       if ('userId_endpoint' in where && where.userId_endpoint) {
         const subscription = this.pushSubscriptions.find(
@@ -60,11 +72,11 @@ class PrismaServiceMock {
             item.userId === where.userId_endpoint.userId &&
             item.endpoint === where.userId_endpoint.endpoint,
         );
-        return subscription ? { ...subscription } : null;
+        return Promise.resolve(subscription ? { ...subscription } : null);
       }
-      return null;
+      return Promise.resolve(null);
     },
-    create: async ({
+    create: ({
       data,
     }: {
       data: {
@@ -83,15 +95,15 @@ class PrismaServiceMock {
         createdAt: new Date(),
       };
       this.pushSubscriptions.push(entity);
-      return { ...entity };
+      return Promise.resolve({ ...entity });
     },
-    delete: async ({ where }: { where: { id: string } }) => {
+    delete: ({ where }: { where: { id: string } }) => {
       const index = this.pushSubscriptions.findIndex((item) => item.id === where.id);
       if (index === -1) {
-        throw new Error('Push subscription not found');
+        return Promise.reject(new Error('Push subscription not found'));
       }
       const [removed] = this.pushSubscriptions.splice(index, 1);
-      return { ...removed };
+      return Promise.resolve({ ...removed });
     },
   };
 
@@ -109,7 +121,7 @@ class JwtAuthGuardMock implements CanActivate {
   constructor(private readonly tokens: Record<string, AuthenticatedUser>) {}
 
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest<FastifyRequest>();
+    const request = context.switchToHttp().getRequest<AuthenticatedFastifyRequest>();
     const authHeader = request.headers['authorization'];
 
     if (!authHeader || Array.isArray(authHeader)) {
@@ -123,7 +135,7 @@ class JwtAuthGuardMock implements CanActivate {
     if (type !== 'Bearer' || !token) {
       throw new UnauthorizedException({
         code: 'INVALID_TOKEN',
-        message: 'Formato de token no válido',
+        message: 'Formato de token no vÃƒÂ¡lido',
       });
     }
 
@@ -131,11 +143,11 @@ class JwtAuthGuardMock implements CanActivate {
     if (!user) {
       throw new UnauthorizedException({
         code: 'INVALID_TOKEN',
-        message: 'Token inválido o expirado',
+        message: 'Token invÃƒÂ¡lido o expirado',
       });
     }
 
-    (request as any).user = user;
+    request.user = user;
     return true;
   }
 }
@@ -147,6 +159,7 @@ describe('Push subscriptions (e2e)', () => {
     'token-user-1': { sub: 'usr_1', curp: 'CURP010101HDFABC01' },
     'token-user-2': { sub: 'usr_2', curp: 'CURP020202HDFABC02' },
   };
+  const getServer = (): HttpServer => app.getHttpServer() as HttpServer;
 
   beforeAll(async () => {
     prisma = new PrismaServiceMock();
@@ -186,7 +199,7 @@ describe('Push subscriptions (e2e)', () => {
   });
 
   it('creates a push subscription for the authenticated user', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(getServer())
       .post('/push/subscriptions')
       .set('Authorization', 'Bearer token-user-1')
       .send({
@@ -198,18 +211,19 @@ describe('Push subscriptions (e2e)', () => {
       })
       .expect(201);
 
-    expect(response.body).toMatchObject({
+    const payload = response.body as PushSubscriptionResponse;
+    expect(payload).toMatchObject({
       userId: 'usr_1',
       endpoint: 'https://example.com/push/123',
       p256dh: 'p256dh-key',
       auth: 'auth-key',
     });
-    expect(response.body).toHaveProperty('id');
-    expect(response.body).toHaveProperty('createdAt');
+    expect(payload.id).toBeDefined();
+    expect(payload.createdAt).toBeDefined();
   });
 
   it('returns conflict when the same subscription already exists for the user', async () => {
-    await request(app.getHttpServer())
+    await request(getServer())
       .post('/push/subscriptions')
       .set('Authorization', 'Bearer token-user-1')
       .send({
@@ -221,7 +235,7 @@ describe('Push subscriptions (e2e)', () => {
       })
       .expect(201);
 
-    const conflictResponse = await request(app.getHttpServer())
+    const conflictResponse = await request(getServer())
       .post('/push/subscriptions')
       .set('Authorization', 'Bearer token-user-1')
       .send({
@@ -232,16 +246,21 @@ describe('Push subscriptions (e2e)', () => {
         },
       })
       .expect(409);
+    const conflictPayload = conflictResponse.body as {
+      statusCode: number;
+      message: string;
+      code: string;
+    };
 
-    expect(conflictResponse.body).toMatchObject({
+    expect(conflictPayload).toMatchObject({
       statusCode: 409,
-      message: 'Ya existe una suscripción con ese endpoint para el usuario',
+      message: 'Ya existe una suscripcion con ese endpoint para el usuario',
       code: 'PUSH_SUBSCRIPTION_EXISTS',
     });
   });
 
   it('deletes a push subscription owned by the authenticated user', async () => {
-    const { body } = await request(app.getHttpServer())
+    const createResponse = await request(getServer())
       .post('/push/subscriptions')
       .set('Authorization', 'Bearer token-user-1')
       .send({
@@ -253,14 +272,15 @@ describe('Push subscriptions (e2e)', () => {
       })
       .expect(201);
 
-    await request(app.getHttpServer())
-      .delete(`/push/subscriptions/${body.id}`)
+    const created = createResponse.body as PushSubscriptionResponse;
+    await request(getServer())
+      .delete(`/push/subscriptions/${created.id}`)
       .set('Authorization', 'Bearer token-user-1')
       .expect(204);
   });
 
   it('rejects requests without a JWT access token', async () => {
-    const response = await request(app.getHttpServer())
+    const response = await request(getServer())
       .post('/push/subscriptions')
       .send({
         endpoint: 'https://example.com/push/unauthorized',
@@ -271,7 +291,12 @@ describe('Push subscriptions (e2e)', () => {
       })
       .expect(401);
 
-    expect(response.body).toMatchObject({
+    const payload = response.body as {
+      statusCode: number;
+      code: string;
+      message: string;
+    };
+    expect(payload).toMatchObject({
       statusCode: 401,
       code: 'UNAUTHORIZED',
       message: 'Token no encontrado',

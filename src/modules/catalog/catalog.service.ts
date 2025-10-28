@@ -90,7 +90,7 @@ export class CatalogService {
         activo: true,
       },
     });
-    if (!merchant || !merchant.activo) {
+    if (!merchant) {
       throw new NotFoundException({
         statusCode: 404,
         code: 'MERCHANT_NOT_FOUND',
@@ -98,7 +98,15 @@ export class CatalogService {
         error: 'Not Found',
       });
     }
-    const { activo, ...merchantData } = merchant;
+    const { activo: isActive, ...merchantData } = merchant;
+    if (!isActive) {
+      throw new NotFoundException({
+        statusCode: 404,
+        code: 'MERCHANT_NOT_FOUND',
+        message: 'Comercio no encontrado',
+        error: 'Not Found',
+      });
+    }
     return merchantData;
   }
 }

@@ -6,7 +6,7 @@ import {
   HttpStatus,
   LoggerService,
 } from '@nestjs/common';
-import { FastifyRequest } from 'fastify';
+import { FastifyError, FastifyReply, FastifyRequest } from 'fastify';
 
 interface HttpErrorFilterOptions {
   exposeErrorDetails: boolean;
@@ -20,30 +20,48 @@ export class HttpErrorFilter implements ExceptionFilter {
     private readonly options: HttpErrorFilterOptions = { exposeErrorDetails: true },
   ) {}
 
+  private isFastifyHttpError(exception: unknown): exception is FastifyError & {
+    statusCode?: number;
+    status?: number;
+    code?: string;
+    details?: unknown;
+    validation?: unknown;
+  } {
+    if (!exception || typeof exception !== 'object') {
+      return false;
+    }
+
+    const candidate = exception as Record<string, unknown>;
+    const hasStatus =
+      typeof candidate.statusCode === 'number' || typeof candidate.status === 'number';
+
+    return hasStatus && typeof candidate.message === 'string';
+  }
+
   catch(exception: unknown, host: ArgumentsHost) {
     const ctx = host.switchToHttp();
-    const response = ctx.getResponse();
+    const response = ctx.getResponse<FastifyReply>();
     const request = ctx.getRequest<FastifyRequest>();
 
     let status = HttpStatus.INTERNAL_SERVER_ERROR;
     let message = 'Internal server error';
     let code = 'INTERNAL_ERROR';
     let details: unknown;
+    let handledAsHttpError = false;
 
     if (exception instanceof HttpException) {
+      handledAsHttpError = true;
       status = exception.getStatus();
       const responseBody = exception.getResponse();
       const responseObject =
         typeof responseBody === 'string'
           ? { message: responseBody }
           : (responseBody as Record<string, unknown>);
-      const responseMessage =
-        responseObject?.message ?? exception.message ?? 'Error';
-
+      const responseMessage = responseObject?.message ?? exception.message ?? 'Error';
       const isArrayMessage = Array.isArray(responseMessage);
       message = isArrayMessage
-        ? (responseMessage as string[]).join(', ')
-        : String(responseMessage);
+        ? responseMessage.map((item) => this.coerceToMessage(item)).join(', ')
+        : this.coerceToMessage(responseMessage);
 
       code =
         (responseObject?.code as string | undefined) ??
@@ -55,6 +73,21 @@ export class HttpErrorFilter implements ExceptionFilter {
       } else if (isArrayMessage) {
         details = responseMessage;
       }
+    } else if (this.isFastifyHttpError(exception)) {
+      handledAsHttpError = true;
+      const httpStatus = exception.statusCode ?? exception.status;
+      status =
+        typeof httpStatus === 'number' && httpStatus >= 100
+          ? httpStatus
+          : HttpStatus.INTERNAL_SERVER_ERROR;
+      message = this.coerceToMessage(exception.message);
+      code =
+        typeof exception.code === 'string' && exception.code.trim().length > 0
+          ? exception.code
+          : status >= HttpStatus.INTERNAL_SERVER_ERROR
+            ? 'FASTIFY_INTERNAL_ERROR'
+            : 'FASTIFY_ERROR';
+      details = exception.details ?? exception.validation ?? details;
     } else if (exception instanceof Error) {
       message = exception.message;
     }
@@ -62,8 +95,8 @@ export class HttpErrorFilter implements ExceptionFilter {
     const exposeErrorDetails = this.options.exposeErrorDetails;
 
     if (!exposeErrorDetails) {
-      const isHttpException = exception instanceof HttpException;
-      if (!isHttpException || status >= HttpStatus.INTERNAL_SERVER_ERROR) {
+      const isClientError = handledAsHttpError && status < HttpStatus.INTERNAL_SERVER_ERROR;
+      if (!isClientError) {
         status = HttpStatus.INTERNAL_SERVER_ERROR;
         message = 'Internal server error';
         code = 'INTERNAL_ERROR';
@@ -94,12 +127,32 @@ export class HttpErrorFilter implements ExceptionFilter {
       this.options.logger?.warn(logPayload, HttpErrorFilter.name);
     }
 
-    if (this.options.captureException && (status >= HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException))) {
+    if (
+      this.options.captureException &&
+      (status >= HttpStatus.INTERNAL_SERVER_ERROR || !(exception instanceof HttpException))
+    ) {
       this.options.captureException(exception, {
         ...logPayload,
       });
     }
 
     response.status(status).send(responseBody);
+  }
+
+  private coerceToMessage(value: unknown): string {
+    if (typeof value === 'string') {
+      return value;
+    }
+    if (typeof value === 'number' || typeof value === 'boolean') {
+      return String(value);
+    }
+    if (value instanceof Error) {
+      return value.message;
+    }
+    try {
+      return JSON.stringify(value);
+    } catch {
+      return 'Unknown error';
+    }
   }
 }

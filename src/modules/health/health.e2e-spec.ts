@@ -1,9 +1,11 @@
 import { ValidationPipe } from '@nestjs/common';
 import { Test } from '@nestjs/testing';
 import { FastifyAdapter, NestFastifyApplication } from '@nestjs/platform-fastify';
-import * as request from 'supertest';
+import request from 'supertest';
 import { PrismaService } from '../../common/services/prisma.service';
 import { HealthModule } from './health.module';
+
+type HttpServer = Parameters<typeof request>[0];
 
 describe('HealthController (e2e)', () => {
   let app: NestFastifyApplication;
@@ -48,7 +50,9 @@ describe('HealthController (e2e)', () => {
   it('returns db true when the database is reachable', async () => {
     prismaService.$queryRaw.mockResolvedValueOnce(undefined);
 
-    const response = await request(app.getHttpServer()).get('/healthz');
+    const response = await request(app.getHttpServer() as HttpServer).get(
+      '/healthz',
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok', db: true });
@@ -58,7 +62,9 @@ describe('HealthController (e2e)', () => {
   it('returns db false when the database is not reachable', async () => {
     prismaService.$queryRaw.mockRejectedValueOnce(new Error('oops'));
 
-    const response = await request(app.getHttpServer()).get('/healthz');
+    const response = await request(app.getHttpServer() as HttpServer).get(
+      '/healthz',
+    );
 
     expect(response.status).toBe(200);
     expect(response.body).toEqual({ status: 'ok', db: false });
