@@ -60,9 +60,9 @@ export class AuthService {
     );
   }
 
-  async login({ email, password }: LoginDto): Promise<AuthTokensDto> {
-    const normalizedEmail = email.trim().toLowerCase();
-    const user = await this.usersService.findByEmail(normalizedEmail);
+  async login({ curp, password }: LoginDto): Promise<AuthTokensDto> {
+    const normalizedCurp = curp.trim().toUpperCase();
+    const user = await this.usersService.findByCurp(normalizedCurp);
 
     if (!user || !user.passwordHash) {
       throw new UnauthorizedException({

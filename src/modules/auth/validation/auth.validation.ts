@@ -105,12 +105,17 @@ export const registerSchema = Joi.object({
 });
 
 export const loginSchema = Joi.object({
-  email: Joi.string().trim().lowercase().email().required().messages({
-    'string.email': 'El correo electronico debe ser valido',
-    'string.empty': 'El correo electronico es obligatorio',
-  }),
+  curp: Joi.string()
+    .trim()
+    .uppercase()
+    .pattern(CURP_REGEX)
+    .required()
+    .messages({
+      'string.pattern.base': 'La CURP proporcionada no es valida',
+      'string.empty': 'La CURP es obligatoria',
+    }),
   password: Joi.string().min(8).required().messages({
-    'string.min': 'La contraseña debe tener al menos 8 caracteres',
-    'string.empty': 'La contraseña es obligatoria',
+    'string.min': 'La contrasena debe tener al menos 8 caracteres',
+    'string.empty': 'La contrasena es obligatoria',
   }),
 });

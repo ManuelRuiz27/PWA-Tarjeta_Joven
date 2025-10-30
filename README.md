@@ -96,6 +96,11 @@ Esto levanta PostgreSQL y el backend en:
 - Swagger UI: `http://localhost:8080/docs`
 - Documento OpenAPI (JSON): `http://localhost:8080/docs-json`
 
+### Formato de respuesta y CORS
+
+- Todas las rutas REST responden en JSON (`application/json`) salvo los endpoints que aceptan `multipart/form-data` para el registro.
+- El backend expone CORS mediante Fastify y toma sus reglas de `CORS_ORIGIN` y `CORS_CREDENTIALS`; por defecto permite el origen configurado en `.env` (por ejemplo `http://localhost:3000` o `http://localhost:4200`).
+
 ## Rutas disponibles
 
 ### Vistas y documentacion
@@ -113,7 +118,7 @@ Esto levanta PostgreSQL y el backend en:
 | `POST` | `/api/v1/auth/otp/send` | No | Solicita el envio de un codigo OTP usando la CURP. | Protegido por `OtpThrottleGuard` (limite configurable via `RATE_LIMIT_OTP_*`); responde `204 No Content`. |
 | `POST` | `/api/v1/auth/otp/verify` | No | Valida el OTP y entrega tokens iniciales. | Devuelve `accessToken`, `refreshToken` y el perfil (placeholder si es alta nueva). |
 | `POST` | `/api/v1/auth/register` | No | Completa el registro del beneficiario. | `multipart/form-data` con datos personales, `acepta_tc` y archivos `ine`, `curp`, `comprobante` (2 MB max c/u). |
-| `POST` | `/api/v1/auth/login` | No | Autentica con email y password. | Retorna tokens JWT y perfil resumido. |
+| `POST` | `/api/v1/auth/login` | No | Autentica con CURP y contrasena. | Retorna tokens JWT y perfil resumido. |
 | `POST` | `/api/v1/auth/refresh` | No | Emite un nuevo access token. | Envia `refreshToken` en el cuerpo; validado por `RefreshGuard`. |
 | `POST` | `/api/v1/auth/logout` | Opcional | Finaliza la sesion del lado del cliente. | Responde `204`; no invalida tokens en servidor. |
 | `GET` | `/api/v1/me` | `Bearer` (access) | Devuelve el perfil del usuario autenticado. | Protegido por `JwtAuthGuard`. |
@@ -133,7 +138,7 @@ Esto levanta PostgreSQL y el backend en:
    `POST /api/v1/auth/register` recibe los datos personales, fuerza el formato de fecha `DD/MM/AAAA`, exige `acepta_tc = true` y tres archivos (`ine`, `curp`, `comprobante`).  
    Los archivos se almacenan via `StorageModule` en `uploads/users/<userId>` cuando `STORAGE_DRIVER=local`, o en S3 si se configura el driver correspondiente.
 3. **Sesion y tokens**  
-   `POST /api/v1/auth/login` permite reingresar con email/password.  
+   `POST /api/v1/auth/login` permite reingresar con CURP + contrasena definida en el registro.  
    `POST /api/v1/auth/refresh` toma `refreshToken` en el cuerpo y devuelve un nuevo `accessToken`.  
    `POST /api/v1/auth/logout` responde `204` para que el cliente limpie tokens y recursos locales.
 4. **Perfil y experiencia autenticada**  

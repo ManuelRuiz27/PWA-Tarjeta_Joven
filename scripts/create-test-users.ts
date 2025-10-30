@@ -1,4 +1,5 @@
 import { PrismaClient } from '@prisma/client';
+import * as bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
 
@@ -10,6 +11,7 @@ type SeedUser = {
   colonia: string;
   telefono?: string;
   municipio?: string;
+  password: string;
 };
 
 const testUsers: SeedUser[] = [
@@ -21,6 +23,7 @@ const testUsers: SeedUser[] = [
     colonia: 'Centro',
     telefono: '3311112233',
     municipio: 'Guadalajara',
+    password: 'ClaveLaura1!',
   },
   {
     nombre: 'Diego',
@@ -30,6 +33,7 @@ const testUsers: SeedUser[] = [
     colonia: 'Colomos',
     telefono: '3322223344',
     municipio: 'Zapopan',
+    password: 'ClaveDiego2!',
   },
   {
     nombre: 'Valeria',
@@ -39,6 +43,7 @@ const testUsers: SeedUser[] = [
     colonia: 'Oblatos',
     telefono: '3333334455',
     municipio: 'Tlaquepaque',
+    password: 'ClaveValeria3!',
   },
   {
     nombre: 'Carlos',
@@ -48,6 +53,7 @@ const testUsers: SeedUser[] = [
     colonia: 'Mirador',
     telefono: '3344445566',
     municipio: 'Guadalajara',
+    password: 'ClaveCarlos4!',
   },
   {
     nombre: 'Fernanda',
@@ -57,11 +63,14 @@ const testUsers: SeedUser[] = [
     colonia: 'Chapalita',
     telefono: '3355556677',
     municipio: 'Zapopan',
+    password: 'ClaveFer5!',
   },
 ];
 
 async function seedUsers() {
   for (const user of testUsers) {
+    const passwordHash = await bcrypt.hash(user.password, 10);
+
     await prisma.user.upsert({
       where: { curp: user.curp },
       update: {
@@ -72,6 +81,7 @@ async function seedUsers() {
         telefono: user.telefono,
         municipio: user.municipio,
         isActive: true,
+        passwordHash,
       },
       create: {
         nombre: user.nombre,
@@ -82,6 +92,7 @@ async function seedUsers() {
         telefono: user.telefono,
         municipio: user.municipio,
         isActive: true,
+        passwordHash,
       },
     });
   }
