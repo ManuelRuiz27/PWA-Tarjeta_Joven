@@ -3,8 +3,8 @@ WORKDIR /app
 RUN apk add --no-cache libc6-compat openssl
 
 FROM base AS deps
-COPY package.json package-lock.json* ./
-RUN npm install --legacy-peer-deps
+COPY package.json ./
+RUN npm install
 
 FROM deps AS build
 COPY . .
@@ -20,7 +20,6 @@ FROM base AS production
 ENV NODE_ENV=production
 COPY package.json ./
 COPY prisma ./prisma
-COPY scripts ./scripts
 COPY --from=production-deps /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
-CMD ["node", "dist/main.js"]
+CMD ["node", "dist/server.js"]

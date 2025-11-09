@@ -1,99 +1,46 @@
-import { Body, Controller, HttpCode, HttpStatus, Post, Req, UseGuards } from '@nestjs/common';
-import {
-  ApiCreatedResponse,
-  ApiNoContentResponse,
-  ApiOkResponse,
-  ApiOperation,
-  ApiTags,
-  ApiConsumes,
-} from '@nestjs/swagger';
+import { Router } from 'express';
+import type { RequestHandler } from 'express';
+
 import { AuthService } from './auth.service';
-import { SendOtpDto } from './dto/send-otp.dto';
-import { VerifyOtpDto } from './dto/verify-otp.dto';
-import { AuthTokensDto } from './dto/auth-tokens.dto';
-import { LoginDto } from './dto/login.dto';
-import { RegisterDto } from './dto/register.dto';
-import { RegisterResponseDto } from './dto/register-response.dto';
-import { RefreshTokenDto } from './dto/refresh-token.dto';
-import { FastifyRequest } from 'fastify';
-import { OtpThrottleGuard } from '../../common/guards/otp-throttle.guard';
-import { RefreshGuard } from '../../common/guards/refresh.guard';
-import { JoiValidationPipe } from '../../common/pipes/joi-validation.pipe';
-import { AuthenticatedUser } from '../../common/decorators/current-user.decorator';
-import {
-  loginSchema,
-  refreshSchema,
-  registerSchema,
-  sendOtpSchema,
-  verifyOtpSchema,
-} from './validation/auth.validation';
 
-@ApiTags('Auth')
-@Controller('auth')
-export class AuthController {
-  constructor(private readonly authService: AuthService) {}
+const authRouter = Router();
+const authService = new AuthService();
 
-  @Post('otp/send')
-  @UseGuards(OtpThrottleGuard)
-  @ApiOperation({ summary: 'Enviar OTP al usuario' })
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiNoContentResponse({ description: 'OTP enviado correctamente' })
-  async sendOtp(@Body(new JoiValidationPipe(sendOtpSchema)) dto: SendOtpDto): Promise<void> {
-    await this.authService.sendOtp(dto);
+const registerHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { email, password } = req.body ?? {};
+
+    if (!email || !password) {
+      res.status(400).json({ message: 'Email and password are required' });
+      return;
+    }
+
+    const payload = await authService.register(email, password);
+
+    res.status(201).json(payload);
+  } catch (error) {
+    next(error);
   }
+};
 
-  @Post('otp/verify')
-  @ApiOperation({ summary: 'Verificar OTP' })
-  @ApiOkResponse({ type: AuthTokensDto })
-  verifyOtp(@Body(new JoiValidationPipe(verifyOtpSchema)) dto: VerifyOtpDto): Promise<AuthTokensDto> {
-    return this.authService.verifyOtp(dto);
-  }
+const loginHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { email, password } = req.body ?? {};
 
-  @Post('login')
-  @ApiOperation({ summary: 'Iniciar sesión' })
-  @ApiOkResponse({ type: AuthTokensDto })
-  @HttpCode(HttpStatus.OK)
-  login(@Body(new JoiValidationPipe(loginSchema)) dto: LoginDto): Promise<AuthTokensDto> {
-    return this.authService.login(dto);
-  }
+    if (!email || !password) {
+      res.status(400).json({ message: 'Email and password are required' });
+      return;
+    }
 
-  @Post('register')
-  @ApiOperation({ summary: 'Registrar un nuevo usuario' })
-  @ApiConsumes('multipart/form-data')
-  @ApiCreatedResponse({
-    type: RegisterResponseDto,
-    description: 'Registro recibido correctamente',
-  })
-  async register(@Body(new JoiValidationPipe(registerSchema)) dto: RegisterDto): Promise<RegisterResponseDto> {
-    return this.authService.register(dto);
-  }
+    const token = await authService.login(email, password);
 
-  @Post('refresh')
-  @UseGuards(RefreshGuard)
-  @ApiOperation({ summary: 'Refrescar token de acceso' })
-  @ApiOkResponse({
-    schema: {
-      type: 'object',
-      properties: {
-        accessToken: { type: 'string' },
-      },
-      example: {
-        accessToken: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...',
-      },
-    },
-  })
-  refresh(
-    @Req() request: FastifyRequest & { user: AuthenticatedUser },
-    @Body(new JoiValidationPipe(refreshSchema)) _dto: RefreshTokenDto,
-  ) {
-    return this.authService.refreshToken(request.user);
+    res.status(200).json({ token });
+  } catch (error) {
+    next(error);
   }
+};
 
-  @Post('logout')
-  @ApiOperation({ summary: 'Cerrar sesión' })
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @ApiNoContentResponse({ description: 'Sesión cerrada correctamente' })
-  logout() {
-    return this.authService.logout();
-  }
-}
+authRouter.post('/register', registerHandler);
+authRouter.post('/login', loginHandler);
+
+export const authRoutes = authRouter;

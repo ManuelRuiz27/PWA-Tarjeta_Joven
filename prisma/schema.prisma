@@ -4,66 +4,13 @@ generator client {
 
 datasource db {
   provider = "postgresql"
-  url      = env("DB_URI")
+  url      = env("DATABASE_URL")
 }
 
 model User {
-  id              String            @id @default(cuid())
-  nombre          String
-  apellidos       String
-  curp            String            @unique
-  email           String?           @unique
-  passwordHash    String?
-  fechaNacimiento DateTime
-  colonia         String
-  telefono        String?
-  municipio       String?
-  isActive        Boolean           @default(true)
-  createdAt       DateTime          @default(now())
-  updatedAt       DateTime          @updatedAt
-  pushSubscriptions PushSubscription[]
-}
-
-model OtpRequest {
-  id        String   @id @default(cuid())
-  curp      String
-  codeHash  String
-  expiresAt DateTime
-  attempts  Int      @default(0)
-  resends   Int      @default(0)
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  password  String
   createdAt DateTime @default(now())
-
-  @@index([curp])
-}
-
-model Merchant {
-  id          String   @id @default(cuid())
-  nombre      String
-  categoria   String
-  municipio   String
-  descuento   String
-  direccion   String
-  horario     String
-  descripcion String?
-  lat         Float?
-  lng         Float?
-  activo      Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([categoria])
-  @@index([municipio])
-  @@index([nombre])
-}
-
-model PushSubscription {
-  id        String   @id @default(cuid())
-  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
-  userId    String
-  endpoint  String
-  p256dh    String
-  auth      String
-  createdAt DateTime @default(now())
-
-  @@unique([userId, endpoint])
+  updatedAt DateTime @updatedAt
 }
