@@ -2,11 +2,17 @@ declare module 'express' {
   export interface Request {
     body?: any;
     [key: string]: any;
+    user?: {
+      userId: number;
+      email: string;
+    };
+    headers?: Record<string, string | undefined>;
   }
   export interface Response {
     json: (body: unknown) => Response;
     status: (code: number) => Response;
     header: (name: string, value: string) => Response;
+    send: (body?: unknown) => Response;
   }
   export interface NextFunction {
     (err?: unknown): void;
@@ -63,4 +69,5 @@ declare module 'multer' {
 
 declare module 'jsonwebtoken' {
   export function sign(payload: any, secret: string, options?: any): string;
+  export function verify(token: string, secret: string): any;
 }
