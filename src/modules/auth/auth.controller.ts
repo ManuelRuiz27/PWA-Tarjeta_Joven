@@ -32,9 +32,26 @@ const loginHandler: RequestHandler = async (req, res, next) => {
       return;
     }
 
-    const token = await authService.login(email, password);
+    const tokens = await authService.login(email, password);
 
-    res.status(200).json({ token });
+    res.status(200).json(tokens);
+  } catch (error) {
+    next(error);
+  }
+};
+
+const logoutHandler: RequestHandler = async (req, res, next) => {
+  try {
+    const { refreshToken } = req.body ?? {};
+
+    if (!refreshToken) {
+      res.status(400).json({ message: 'Refresh token is required' });
+      return;
+    }
+
+    await authService.logout(refreshToken);
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
@@ -42,5 +59,6 @@ const loginHandler: RequestHandler = async (req, res, next) => {
 
 authRouter.post('/register', registerHandler);
 authRouter.post('/login', loginHandler);
+authRouter.post('/logout', logoutHandler);
 
 export const authRoutes = authRouter;
