@@ -3,9 +3,9 @@ services:
     image: postgres:15
     restart: unless-stopped
     environment:
-      POSTGRES_DB: tjdb
-      POSTGRES_USER: tjuser
-      POSTGRES_PASSWORD: tjpass
+      POSTGRES_DB: appdb
+      POSTGRES_USER: appuser
+      POSTGRES_PASSWORD: applocal
     ports:
       - '5432:5432'
     volumes:
@@ -19,20 +19,21 @@ services:
 
   backend:
     build: .
-    container_name: Tarjeta-Joven_API
+    container_name: modular-express-api
     restart: unless-stopped
     depends_on:
       db:
         condition: service_healthy
     env_file:
       - .env
+    environment:
+      DATABASE_URL: postgresql://appuser:applocal@db:5432/appdb
+      PORT: 3000
     ports:
-      - '8080:8080'
-    command: sh -c "npx prisma migrate deploy && node dist/main.js"
-    volumes:
-      - ./uploads:/app/uploads
+      - '3000:3000'
+    command: sh -c "npx prisma migrate deploy && node dist/server.js"
     healthcheck:
-      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:8080/api/v1/healthz > /dev/null 2>&1']
+      test: ['CMD-SHELL', 'wget -qO- http://127.0.0.1:3000/api/health > /dev/null 2>&1']
       interval: 30s
       timeout: 5s
       retries: 5
